@@ -386,3 +386,10 @@ FodyWeavers.xsd
 # JetBrains Rider
 .idea/
 *.sln.iml
+# Arquivos locais (QA)
+frontend/.env.local
+frontend/.env.qa.local
+frontend/.env.production.local
+frontend/.env.production
+backend/publish/appsettings.json
+
