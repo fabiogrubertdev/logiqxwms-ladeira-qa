@@ -200,16 +200,16 @@
                         :hint="$t('system.tips.multipleBarcodesHint') || 'Separe por Enter, vírgula, ponto-e-vírgula, espaço ou Tab'"
                         persistent-hint
                         placeholder="Digite e confirme para criar a tag"
-                        @update:modelValue="() => syncRowBarcodes(row as RowWithBarcodes)"
-                        @blur="() => syncRowBarcodes(row as RowWithBarcodes)"
-                        @paste.prevent="(e:any) => onPasteIntoCombobox(e, row as RowWithBarcodes)"
+                        @update:modelValue="() => syncRowBarcodes(row)"
+                        @blur="() => syncRowBarcodes(row)"
+                        @paste.prevent="(e:any) => onPasteIntoCombobox(e, row)"
                         style="min-width: 280px"
                       />
                     </template>
                     <template #default="{ row }">
                       <div>
                         <v-chip
-                          v-for="bc in ((row as RowWithBarcodes)._bar_codes || tokenizeBarcodes((row as RowWithBarcodes).bar_code))"
+                          v-for="bc in (row._bar_codes || tokenizeBarcodes(row.bar_code))"
                           :key="bc"
                           size="x-small"
                           class="ma-1"
@@ -259,7 +259,7 @@
                         icon="mdi-delete-outline"
                         :tooltip-text="$t('system.page.delete')"
                         :icon-color="errorColor"
-                        @click="method.deleteRow(row as RowWithBarcodes)"
+                        @click="method.deleteRow(row)"
                       ></tooltip-btn>
                     </template>
                   </vxe-column>
@@ -298,12 +298,6 @@ import { exportData } from '@/utils/exportTable'
 import { BASE_URL } from '@/constant/filePathBase'
 import hprintDialog from '@/components/hiprint/hiprintFast.vue'
 
-/** ⬇️ Tipo auxiliar local: estende a linha com campos opcionais de múltiplos códigos */
-export type RowWithBarcodes = CommodityDetailVO & {
-  bar_code?: string
-  _bar_codes?: string[]
-}
-
 const formRef = ref()
 const emit = defineEmits(['close', 'saveSuccess'])
 const xTable = ref()
@@ -322,6 +316,11 @@ const dialogTitle = computed(() => {
   return 'add'
 })
 
+/** 🔹 Tipo auxiliar para a linha com chips de códigos */
+type RowWithBarcodes = Partial<CommodityDetailVO> & {
+  _bar_codes: string[];
+};
+
 /** 🔹 Separadores aceitos: vírgula, ponto-e-vírgula, espaços (incl. Tab/Enter) */
 const SEP_REGEX = /[,\s;]+/g
 
@@ -338,13 +337,13 @@ function tokenizeBarcodes(str?: string | null): string[] {
 }
 
 /** Mantém row._bar_codes em sincronia com row.bar_code, e vice-versa */
-function syncRowBarcodes(row: RowWithBarcodes) {
+function syncRowBarcodes(row: any) {
   row._bar_codes = Array.from(new Set((row._bar_codes || []).map((s: string) => String(s).trim()).filter(Boolean)))
   row.bar_code = (row._bar_codes || []).join(',')
 }
 
 /** Ao colar texto no combobox, quebramos pelos separadores e fundimos ao array */
-function onPasteIntoCombobox(e: ClipboardEvent, row: RowWithBarcodes) {
+function onPasteIntoCombobox(e: ClipboardEvent, row: any) {
   const text = (e.clipboardData || (window as any).clipboardData).getData('text') || ''
   const tokens = tokenizeBarcodes(text)
   const cur = new Set(row._bar_codes || [])
@@ -354,7 +353,7 @@ function onPasteIntoCombobox(e: ClipboardEvent, row: RowWithBarcodes) {
 }
 
 /** Inicializa _bar_codes de todas as linhas atuais */
-function initAllRowsBarcodes(list: RowWithBarcodes[]) {
+function initAllRowsBarcodes(list: any[]) {
   (list || []).forEach(r => {
     r._bar_codes = Array.isArray(r._bar_codes) && r._bar_codes.length
       ? Array.from(new Set(r._bar_codes.map((s: string) => String(s).trim()).filter(Boolean)))
@@ -364,7 +363,7 @@ function initAllRowsBarcodes(list: RowWithBarcodes[]) {
 }
 
 /** Antes de enviar, garante que cada linha está serializada corretamente */
-function normalizeAllBarcodes(list: RowWithBarcodes[]) {
+function normalizeAllBarcodes(list: any[]) {
   (list || []).forEach(r => syncRowBarcodes(r))
 }
 
@@ -612,13 +611,14 @@ const method = reactive({
   },
   insertOneRow: () => {
     const $table = xTable.value
-    // cria linha e garante campos iniciais
-    const newRow: RowWithBarcodes = {
+    // cria linha e garante campos iniciais (tipagem flexível via RowWithBarcodes)
+    const newRow = {
+      id: 0,
       sku_code: '',
       sku_name: '',
       unit: '',
       bar_code: '',
-      _bar_codes: []
+      _bar_codes: [] as string[]
     } as RowWithBarcodes
     $table.insertAt(newRow, -1)
   },
@@ -645,8 +645,9 @@ const method = reactive({
       let form = { ...data.form }
       const insertRecords = $table.getInsertRecords()
       form.detailList = []
+
       // 🔹 sempre normaliza barcodes antes de montar o payload
-      const fullData: RowWithBarcodes[] = $table.getTableData().fullData || []
+      const fullData = $table.getTableData().fullData || []
       normalizeAllBarcodes(fullData)
 
       if (dialogTitle.value === 'add') {
@@ -684,14 +685,13 @@ const method = reactive({
   },
   editRow: (row: CommodityDetailVO) => {
     const $table = xTable.value
-    const r = row as RowWithBarcodes
     // garante que chips estão prontos ao entrar em edição
-    if (!Array.isArray(r._bar_codes)) {
-      r._bar_codes = tokenizeBarcodes(r.bar_code)
+    if (!Array.isArray((row as any)._bar_codes)) {
+      ;(row as any)._bar_codes = tokenizeBarcodes((row as any).bar_code)
     }
-    $table.setEditRow(r)
+    $table.setEditRow(row)
   },
-  deleteRow: (row: RowWithBarcodes) => {
+  deleteRow: (row: CommodityDetailVO) => {
     const $table = xTable.value
     hookComponent.$dialog({
       content: i18n.global.t('system.tips.beforeDeleteDetailMessage'),
@@ -711,7 +711,7 @@ watch(
       method.getCombobox()
       data.form = props.form
       // 🔹 inicializa as tags de todos os SKUs ao abrir
-      initAllRowsBarcodes((data.form.detailList || []) as RowWithBarcodes[])
+      initAllRowsBarcodes(data.form.detailList || [])
     }
   }
 )
