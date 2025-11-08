@@ -48,7 +48,9 @@
                     clearable
                     class="mb-4"
                   ></v-text-field>
-                  <!-- <v-text-field
+                  <!-- Campo bar_code do SPU (mantido comentado; estamos tratando por SKU na grid) -->
+                  <!--
+                  <v-text-field
                     v-model="data.form.bar_code"
                     :rules="data.rules.bar_code"
                     :label="$t('base.commodityManagement.bar_code')"
@@ -56,7 +58,8 @@
                     density="compact"
                     clearable
                     class="mb-4"
-                  ></v-text-field> -->
+                  ></v-text-field>
+                  -->
                   <v-select
                     v-model="data.form.supplier_name"
                     :items="data.combobox.supplier_name"
@@ -175,18 +178,49 @@
                       <vxe-input v-model="row.sku_name" type="text"></vxe-input>
                     </template>
                   </vxe-column>
-                  <!-- <vxe-column field="supplier_name" :title="$t('base.commodityManagement.supplier_name')"></vxe-column> -->
-                  <!-- <vxe-column field="brand" :title="$t('base.commodityManagement.brand')"></vxe-column> -->
                   <vxe-column field="unit" :title="$t('base.commodityManagement.unit')" :edit-render="{ autofocus: '.vxe-input--inner' }">
                     <template #edit="{ row }">
                       <vxe-input v-model="row.unit" type="text"></vxe-input>
                     </template>
                   </vxe-column>
-                  <vxe-column field="bar_code" :title="$t('base.commodityManagement.bar_code')" :edit-render="{ autofocus: '.vxe-input--inner' }">
+
+                  <!-- 🔹 Múltiplos códigos de barras como chips/tags -->
+                  <vxe-column field="bar_code" :title="$t('base.commodityManagement.bar_code')" :edit-render="{ autofocus: '.v-field__input' }">
                     <template #edit="{ row }">
-                      <vxe-input v-model="row.bar_code" type="text"></vxe-input>
+                      <v-combobox
+                        v-model="row._bar_codes"
+                        multiple
+                        chips
+                        hide-selected
+                        clearable
+                        variant="outlined"
+                        density="compact"
+                        :items="[]"
+                        :delimiters="['Enter', 'Tab', ',',';',' ']"
+                        :hint="$t('system.tips.multipleBarcodesHint') || 'Separe por Enter, vírgula, ponto-e-vírgula, espaço ou Tab'"
+                        persistent-hint
+                        placeholder="Digite e confirme para criar a tag"
+                        @update:modelValue="() => syncRowBarcodes(row)"
+                        @blur="() => syncRowBarcodes(row)"
+                        @paste.prevent="(e:any) => onPasteIntoCombobox(e, row)"
+                        style="min-width: 280px"
+                      />
+                    </template>
+                    <template #default="{ row }">
+                      <div>
+                        <v-chip
+                          v-for="bc in (row._bar_codes || tokenizeBarcodes(row.bar_code))"
+                          :key="bc"
+                          size="x-small"
+                          class="ma-1"
+                          label
+                        >
+                          {{ bc }}
+                        </v-chip>
+                      </div>
                     </template>
                   </vxe-column>
+
                   <vxe-column field="weight" :title="$t('base.commodityManagement.weight')" :edit-render="{ autofocus: '.vxe-input--inner' }">
                     <template #edit="{ row }">
                       <vxe-input v-model="row.weight" type="text"></vxe-input>
@@ -281,6 +315,54 @@ const dialogTitle = computed(() => {
   }
   return 'add'
 })
+
+/** 🔹 Separadores aceitos: vírgula, ponto-e-vírgula, espaços (incl. Tab/Enter) */
+const SEP_REGEX = /[,\s;]+/g
+
+function tokenizeBarcodes(str?: string | null): string[] {
+  if (!str) return []
+  return Array.from(
+    new Set(
+      String(str)
+        .split(SEP_REGEX)
+        .map(s => s.trim())
+        .filter(Boolean)
+    )
+  )
+}
+
+/** Mantém row._bar_codes em sincronia com row.bar_code, e vice-versa */
+function syncRowBarcodes(row: any) {
+  // normaliza o array (remove vazios/duplicados e trims)
+  row._bar_codes = Array.from(new Set((row._bar_codes || []).map((s: string) => String(s).trim()).filter(Boolean)))
+  // serializa para o campo persistido esperado pelo backend
+  row.bar_code = (row._bar_codes || []).join(',')
+}
+
+/** Ao colar texto no combobox, quebramos pelos separadores e fundimos ao array */
+function onPasteIntoCombobox(e: ClipboardEvent, row: any) {
+  const text = (e.clipboardData || (window as any).clipboardData).getData('text') || ''
+  const tokens = tokenizeBarcodes(text)
+  const cur = new Set(row._bar_codes || [])
+  tokens.forEach(t => cur.add(t))
+  row._bar_codes = Array.from(cur)
+  syncRowBarcodes(row)
+}
+
+/** Inicializa _bar_codes de todas as linhas atuais */
+function initAllRowsBarcodes(list: any[]) {
+  (list || []).forEach(r => {
+    r._bar_codes = Array.isArray(r._bar_codes) && r._bar_codes.length
+      ? Array.from(new Set(r._bar_codes.map((s: string) => String(s).trim()).filter(Boolean)))
+      : tokenizeBarcodes(r.bar_code)
+    r.bar_code = (r._bar_codes || []).join(',')
+  })
+}
+
+/** Antes de enviar, garante que cada linha está serializada corretamente */
+function normalizeAllBarcodes(list: any[]) {
+  (list || []).forEach(r => syncRowBarcodes(r))
+}
 
 const data = reactive({
   form: ref<CommodityVO>({
@@ -404,15 +486,7 @@ const data = reactive({
         trigger: 'change'
       }
     ],
-    volume: [
-      // {
-      //   validator: isDecimal,
-      //   validNumerical: 'nonNegative',
-      //   length: 8,
-      //   decimalLength: 3,
-      //   trigger: 'change'
-      // }
-    ],
+    volume: [],
     cost: [
       {
         validator: isDecimal,
@@ -433,72 +507,27 @@ const data = reactive({
     ]
   }),
   combobox: ref<{
-    length_unit: {
-      label: string
-      value: number
-    }[]
-    volume_unit: {
-      label: string
-      value: number
-    }[]
-    weight_unit: {
-      label: string
-      value: number
-    }[]
-    category_name: {
-      label: string
-      value: number
-    }[]
-    supplier_name: {
-      label: string
-      value: number
-    }[]
+    length_unit: { label: string; value: number }[]
+    volume_unit: { label: string; value: number }[]
+    weight_unit: { label: string; value: number }[]
+    category_name: { label: string; value: number }[]
+    supplier_name: { label: string; value: number }[]
   }>({
     length_unit: [
-      {
-        label: 'mm',
-        value: 0
-      },
-      {
-        label: 'cm',
-        value: 1
-      },
-      {
-        label: 'dm',
-        value: 2
-      },
-      {
-        label: 'm',
-        value: 3
-      }
+      { label: 'mm', value: 0 },
+      { label: 'cm', value: 1 },
+      { label: 'dm', value: 2 },
+      { label: 'm', value: 3 }
     ],
     volume_unit: [
-      {
-        label: 'cm³',
-        value: 0
-      },
-      {
-        label: 'dm³',
-        value: 1
-      },
-      {
-        label: 'm³',
-        value: 2
-      }
+      { label: 'cm³', value: 0 },
+      { label: 'dm³', value: 1 },
+      { label: 'm³', value: 2 }
     ],
     weight_unit: [
-      {
-        label: 'mg',
-        value: 0
-      },
-      {
-        label: 'g',
-        value: 1
-      },
-      {
-        label: 'kg',
-        value: 2
-      }
+      { label: 'mg', value: 0 },
+      { label: 'g', value: 1 },
+      { label: 'kg', value: 2 }
     ],
     category_name: [],
     supplier_name: []
@@ -506,7 +535,6 @@ const data = reactive({
 })
 
 const method = reactive({
-  // When the commodity type changes, it is mainly used to assign the ID
   categoryNameChange: (val: string) => {
     if (!val) {
       data.form.category_id = 0
@@ -530,70 +558,45 @@ const method = reactive({
       const file = e.target.files[0]
       if (!file) return
       try {
-        // 假设 submitImage 返回 { data: { path: string } }
         const res = await submitImage(file)
-        // 上传成功后把后端返回的路径赋值给 row.imagesPath
         row.image_url = res.data.data
       } catch (err) {
-        hookComponent.$message({
-          type: 'error',
-          content: '上传失败，请重试'
-        })
+        hookComponent.$message({ type: 'error', content: '上传失败，请重试' })
       }
     }
     input.click()
   },
-
   // Remove image
   removeImage: async (row: any) => {
     if (!row.image_url) return
-    
     try {
       const { data: res } = await deleteImage(row.image_url)
       if (!res.isSuccess) {
-        hookComponent.$message({
-          type: 'error',
-          content: res.errorMessage || '删除图片失败'
-        })
+        hookComponent.$message({ type: 'error', content: res.errorMessage || '删除图片失败' })
         return
       }
-      // 删除成功，前端置空
       row.image_url = ''
-      hookComponent.$message({
-        type: 'success',
-        content: '图片已删除'
-      })
+      hookComponent.$message({ type: 'success', content: '图片已删除' })
     } catch (error) {
-      hookComponent.$message({
-        type: 'error',
-        content: '删除图片请求失败'
-      })
+      hookComponent.$message({ type: 'error', content: '删除图片请求失败' })
       console.error(error)
     }
   },
-
   // Get the options required by the drop-down box
   getCombobox: async () => {
     data.combobox.category_name = []
     data.combobox.supplier_name = []
     const { data: res } = await getCategoryAll()
     if (!res.isSuccess) {
-      hookComponent.$message({
-        type: 'error',
-        content: res.errorMessage
-      })
+      hookComponent.$message({ type: 'error', content: res.errorMessage })
       return
     }
     data.combobox.category_name = res.data
       .filter((item: CategoryVO) => item.is_valid)
       .map((item: CategoryVO) => ({ value: item.id, label: item.category_name }))
-    // Get supplier information
     const { data: supplierRes } = await getSupplierAll()
     if (!supplierRes.isSuccess) {
-      hookComponent.$message({
-        type: 'error',
-        content: supplierRes.errorMessage
-      })
+      hookComponent.$message({ type: 'error', content: supplierRes.errorMessage })
       return
     }
     data.combobox.supplier_name = supplierRes.data
@@ -604,7 +607,15 @@ const method = reactive({
     emit('close')
   },
   insertOneRow: () => {
-    xTable.value.insertAt(-1)
+    const $table = xTable.value
+    // cria linha e garante campos iniciais
+    $table.insertAt({
+      sku_code: '',
+      sku_name: '',
+      unit: '',
+      bar_code: '',
+      _bar_codes: []
+    }, -1)
   },
   // Export table
   exportTable: () => {
@@ -623,16 +634,16 @@ const method = reactive({
     const { valid } = await formRef.value.validate()
     if (valid && !errMap) {
       if ($table.getTableData().fullData.length === 0) {
-        hookComponent.$message({
-          type: 'error',
-          content: i18n.global.t('system.tips.detailLengthIsZero')
-        })
+        hookComponent.$message({ type: 'error', content: i18n.global.t('system.tips.detailLengthIsZero') })
         return
       }
       let form = { ...data.form }
       const insertRecords = $table.getInsertRecords()
       form.detailList = []
-      // Processing detailed data
+      // 🔹 sempre normaliza barcodes antes de montar o payload
+      const fullData = $table.getTableData().fullData || []
+      normalizeAllBarcodes(fullData)
+
       if (dialogTitle.value === 'add') {
         form.detailList = [...insertRecords]
       } else {
@@ -647,13 +658,10 @@ const method = reactive({
 
       form = removeObjectNull(form)
       form.detailList = removeArrayNull(form.detailList)
-      // console.log('提交的表单数据', form)
+
       const { data: res } = dialogTitle.value === 'add' ? await addSpu(form) : await updateSpu(form)
       if (!res.isSuccess) {
-        hookComponent.$message({
-          type: 'error',
-          content: res.errorMessage
-        })
+        hookComponent.$message({ type: 'error', content: res.errorMessage })
         return
       }
       hookComponent.$message({
@@ -662,10 +670,7 @@ const method = reactive({
       })
       emit('saveSuccess')
     } else {
-      hookComponent.$message({
-        type: 'error',
-        content: i18n.global.t('system.checkText.checkFormFail')
-      })
+      hookComponent.$message({ type: 'error', content: i18n.global.t('system.checkText.checkFormFail') })
     }
   },
   print() {
@@ -674,6 +679,10 @@ const method = reactive({
   },
   editRow: (row: CommodityDetailVO) => {
     const $table = xTable.value
+    // garante que chips estão prontos ao entrar em edição
+    if (!Array.isArray(row._bar_codes)) {
+      row._bar_codes = tokenizeBarcodes(row.bar_code)
+    }
     $table.setEditRow(row)
   },
   deleteRow: (row: CommodityDetailVO) => {
@@ -695,6 +704,8 @@ watch(
     if (val) {
       method.getCombobox()
       data.form = props.form
+      // 🔹 inicializa as tags de todos os SKUs ao abrir
+      initAllRowsBarcodes(data.form.detailList || [])
     }
   }
 )
@@ -708,22 +719,18 @@ watch(
   box-sizing: border-box;
   overflow: auto;
 }
-
 .toolbar {
   height: 40px;
 }
-
 .image-cell {
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 6px; // 给四周留白
-
+  padding: 6px;
   .thumb-wrapper {
     position: relative;
     display: inline-block;
   }
-
   .thumb-img {
     width: 60px;
     height: 60px;
@@ -731,7 +738,6 @@ watch(
     border-radius: 4px;
     display: block;
   }
-
   .remove-btn {
     position: absolute;
     top: -6px;

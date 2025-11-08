@@ -8,10 +8,6 @@
             <v-row no-gutters>
               <!-- Operate Btn -->
               <v-col cols="12" sm="4" class="col">
-                <!-- <tooltip-btn icon="mdi-plus" :tooltip-text="$t('system.page.add')" @click="method.add()"></tooltip-btn>
-                <tooltip-btn icon="mdi-refresh" :tooltip-text="$t('system.page.refresh')" @click="method.refresh()"></tooltip-btn>
-                <tooltip-btn icon="mdi-export-variant" :tooltip-text="$t('system.page.export')" @click="method.exportTable"></tooltip-btn> -->
-                
                 <!-- new version -->
                 <BtnGroup :authority-list="data.authorityList" :btn-list="data.btnList" />
               </v-col>
@@ -122,7 +118,21 @@
               <vxe-column field="supplier_name" :title="$t('base.commodityManagement.supplier_name')"> </vxe-column>
               <vxe-column field="brand" :title="$t('base.commodityManagement.brand')"> </vxe-column>
 
-              <vxe-column field="bar_code" :title="$t('base.commodityManagement.bar_code')"> </vxe-column>
+              <!-- bar_code chips -->
+              <vxe-column field="bar_code" :title="$t('base.commodityManagement.bar_code')">
+                <template #default="{ row }">
+                  <div>
+                    <v-chip
+                      v-for="bc in tokenizeBarcodes(row.bar_code)"
+                      :key="bc"
+                      size="x-small"
+                      class="ma-1"
+                      label
+                    >{{ bc }}</v-chip>
+                  </div>
+                </template>
+              </vxe-column>
+
               <vxe-column field="weight" :title="$t('base.commodityManagement.weight')">
                 <template #default="{ row }">
                   <span v-if="row.parent_id > 0">{{ `${row.weight} ${GetUnit('weight', row.weight_unit)}` }}</span>
@@ -159,11 +169,7 @@
                   <span v-if="row.parent_id > 0">{{ row.price }}</span>
                 </template>
               </vxe-column>
-              <!-- <vxe-column field="sku_name" :title="$t('base.commodityManagement.sku_name')"></vxe-column> -->
-              <!-- <vxe-column field="supplier_name" :title="$t('base.commodityManagement.supplier_name')"></vxe-column>
-              <vxe-column field="brand" :title="$t('base.commodityManagement.brand')"></vxe-column>
-              <vxe-column field="unit" :title="$t('base.commodityManagement.unit')"></vxe-column>
-              <vxe-column field="cost" :title="$t('base.commodityManagement.cost')"></vxe-column> -->
+
               <vxe-column field="operate" :title="$t('system.page.operate')" width="160px" :resizable="false" show-overflow>
                 <template #default="{ row }">
                   <div v-if="!row.parent_id || row.parent_id <= 0">
@@ -184,20 +190,6 @@
                     ></tooltip-btn>
                   </div>
                   <div v-else>
-                    <!-- <tooltip-btn
-                      :flat="true"
-                      icon="mdi-qrcode"
-                      :tooltip-text="$t('base.commodityManagement.printQrCode')"
-                      :disabled="!data.authorityList.includes('printQrCode')"
-                      @click="method.printQrCode(row)"
-                    ></tooltip-btn> -->
-                    <!-- <tooltip-btn
-                      :flat="true"
-                      icon="mdi-barcode"
-                      :tooltip-text="$t('base.commodityManagement.printBarCode')"
-                      :disabled="!data.authorityList.includes('printBarCode')"
-                      @click="method.printBarCode(row)"
-                    ></tooltip-btn> -->
                     <tooltip-btn
                       :flat="true"
                       icon="mdi-alarm-light"
@@ -263,7 +255,6 @@ import { exportData } from '@/utils/exportTable'
 import { DEBOUNCE_TIME } from '@/constant/system'
 import BtnGroup from '@/components/system/btnGroup.vue'
 import updateSkuSafetyStock from './update-sku-safety-stock.vue'
-// import qrCodeDialogDialog from './qrCodeDialog.vue'
 import importCommodityTable from './import-commodity-table.vue'
 import BarCodeDialog from '@/components/codeDialog/barCodeDialog.vue'
 import QrCodeDialog from '@/components/codeDialog/qrCodeDialog.vue'
@@ -274,6 +265,20 @@ const updateSkuSaftyStockRef = ref()
 const qrCodeDialogRef = ref()
 const barCodeDialogRef = ref()
 const hprintDialogRef = ref()
+
+/** >>> NOVO: helper para múltiplos códigos (vírgula, ;, espaço, quebras de linha) */
+const SEP_REGEX = /[,\s;]+/g
+function tokenizeBarcodes(str?: string | null): string[] {
+  if (!str) return []
+  return Array.from(
+    new Set(
+      String(str)
+        .split(SEP_REGEX)
+        .map(s => s.trim())
+        .filter(Boolean)
+    )
+  )
+}
 
 const data: DataProps = reactive({
   searchForm: {
@@ -321,7 +326,7 @@ const printDate = reactive({
   printForm: {} as any
 })
 const method = reactive({
-    // Import Dialog
+  // Import Dialog
   openDialogImport: () => {
     data.showDialogImport = true
   },
@@ -340,8 +345,6 @@ const method = reactive({
     const parentRecords = records.filter((item) => !item.parent_id)
     records = records.filter((item) => item.parent_id)
 
-    // data.selectRowData.length === 0 ? (data.selectRowData = [row]) : ''
-    // let records: any[] = data.selectRowData
     if (records.length > 0) {
       for (const parent of parentRecords) {
         for (const child of records) {
@@ -364,13 +367,18 @@ const method = reactive({
       })
     }
   },
+  // >>> AJUSTADO: impressão de código de barras com múltiplos códigos
   printBarCode: () => {
     let records = xTable.value.getCheckboxRecords()
     records = records.filter((item: any) => item.parent_id)
-    records = records.filter((item: any) => item.bar_code)
+    records = records
+      .flatMap((item: any) => {
+        const tokens = tokenizeBarcodes(item.bar_code)
+        if (tokens.length === 0) return []
+        // Quick win: usa o primeiro token por SKU
+        return [{ ...item, bar_code: tokens[0] }]
+      })
 
-    // data.selectRowData.length === 0 ? (data.selectRowData = [row]) : ''
-    // let records = data.selectRowData
     if (records.length > 0) {
       barCodeDialogRef.value.openDialog(records)
     } else {
@@ -616,18 +624,6 @@ onMounted(async () => {
       code: '',
       click: method.print
     }
-    // {
-    //   name: i18n.global.t('base.commodityManagement.printQrCode'),
-    //   icon: 'mdi-qrcode',
-    //   code: 'printQrCode',
-    //   click: method.printQrCode
-    // },
-    // {
-    //   name: i18n.global.t('base.commodityManagement.printBarCode'),
-    //   icon: 'mdi-barcode',
-    //   code: 'printBarCode',
-    //   click: method.printBarCode
-    // }
   ]
 })
 
