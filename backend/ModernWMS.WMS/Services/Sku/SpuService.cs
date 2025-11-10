@@ -2,6 +2,7 @@
  * date：2022-12-21
  * developer：AMo
  */
+using System.Linq; // <-- necessário para Any/Where/Contains
 using Mapster;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -98,82 +99,138 @@ namespace ModernWMS.WMS.Services
         #region Api
         public async Task<(List<SpuBothViewModel> data, int totals)> PageAsync(PageSearch pageSearch, CurrentUser currentUser)
         {
-            ModernWMS.Core.DynamicSearch.QueryCollection queries = new();
-            if (pageSearch.searchObjects.Any())
-            {
-                pageSearch.searchObjects.ForEach(s => queries.Add(s));
-            }
             var Categorys = _dBContext.GetDbSet<CategoryEntity>();
             var Spus = _dBContext.GetDbSet<SpuEntity>();
             var Skus = _dBContext.GetDbSet<SkuEntity>();
             var SkuSafetyStocks = _dBContext.GetDbSet<SkuSafetyStockEntity>();
             var Warehouses = _dBContext.GetDbSet<WarehouseEntity>();
 
-            var query = from m in Spus.AsNoTracking()
-                        join c in Categorys.AsNoTracking() on m.category_id equals c.id
-                        where m.tenant_id == currentUser.tenant_id
-                        select new SpuBothViewModel
-                        {
-                            id = m.id,
-                            spu_code = m.spu_code,
-                            spu_name = m.spu_name,
-                            category_id = m.category_id,
-                            category_name = c.category_name,
-                            spu_description = m.spu_code,
-                            supplier_id = m.supplier_id,
-                            supplier_name = m.supplier_name,
-                            brand = m.brand,
-                            origin = m.origin,
-                            length_unit = m.length_unit,
-                            volume_unit = m.volume_unit,
-                            weight_unit = m.weight_unit,
-                            creator = m.creator,
-                            create_time = m.create_time,
-                            last_update_time = m.last_update_time,
-                            is_valid = m.is_valid,
-                            detailList = Skus.AsNoTracking().Where(t => t.spu_id.Equals(m.id))
-                                         .Select(t => new SkuViewModel
-                                         {
-                                             id = t.id,
-                                             spu_id = t.spu_id,
-                                             sku_code = t.sku_code,
-                                             sku_name = t.sku_name,
-                                             image_url = t.image_url,
-                                             bar_code = t.bar_code,
-                                             weight = t.weight,
-                                             lenght = t.lenght,
-                                             width = t.width,
-                                             height = t.height,
-                                             volume = t.volume,
-                                             unit = t.unit,
-                                             cost = t.cost,
-                                             price = t.price,
-                                             create_time = t.create_time,
-                                             last_update_time = t.last_update_time,
-                                             detailList = (from sss in SkuSafetyStocks.AsNoTracking()
-                                                           join wh in Warehouses on sss.warehouse_id equals wh.id
-                                                           where sss.sku_id.Equals(t.id)
-                                                           select new SkuSafetyStockViewModel
-                                                           {
-                                                               id = sss.id,
-                                                               sku_id = sss.sku_id,
-                                                               safety_stock_qty = sss.safety_stock_qty,
-                                                               warehouse_id = sss.warehouse_id,
-                                                               warehouse_name = wh.warehouse_name
-                                                           }).ToList()
-                                         }).ToList()
-                        };
+            // Base query projetada em ViewModel com detailList
+            var query =
+                from m in Spus.AsNoTracking()
+                join c in Categorys.AsNoTracking() on m.category_id equals c.id
+                where m.tenant_id == currentUser.tenant_id
+                select new SpuBothViewModel
+                {
+                    id = m.id,
+                    spu_code = m.spu_code,
+                    spu_name = m.spu_name,
+                    category_id = m.category_id,
+                    category_name = c.category_name,
+                    spu_description = m.spu_code,
+                    supplier_id = m.supplier_id,
+                    supplier_name = m.supplier_name,
+                    brand = m.brand,
+                    origin = m.origin,
+                    length_unit = m.length_unit,
+                    volume_unit = m.volume_unit,
+                    weight_unit = m.weight_unit,
+                    creator = m.creator,
+                    create_time = m.create_time,
+                    last_update_time = m.last_update_time,
+                    is_valid = m.is_valid,
+                    detailList = Skus.AsNoTracking().Where(t => t.spu_id.Equals(m.id))
+                                 .Select(t => new SkuViewModel
+                                 {
+                                     id = t.id,
+                                     spu_id = t.spu_id,
+                                     sku_code = t.sku_code,
+                                     sku_name = t.sku_name,
+                                     image_url = t.image_url,
+                                     bar_code = t.bar_code,
+                                     weight = t.weight,
+                                     lenght = t.lenght,
+                                     width = t.width,
+                                     height = t.height,
+                                     volume = t.volume,
+                                     unit = t.unit,
+                                     cost = t.cost,
+                                     price = t.price,
+                                     create_time = t.create_time,
+                                     last_update_time = t.last_update_time,
+                                     detailList = (from sss in SkuSafetyStocks.AsNoTracking()
+                                                   join wh in Warehouses on sss.warehouse_id equals wh.id
+                                                   where sss.sku_id.Equals(t.id)
+                                                   select new SkuSafetyStockViewModel
+                                                   {
+                                                       id = sss.id,
+                                                       sku_id = sss.sku_id,
+                                                       safety_stock_qty = sss.safety_stock_qty,
+                                                       warehouse_id = sss.warehouse_id,
+                                                       warehouse_name = wh.warehouse_name
+                                                   }).ToList()
+                                 }).ToList()
+                };
 
+            // ====== INÍCIO: Filtro custom sku_code/bar_code (em detailList) ======
+            var customFilters = (pageSearch?.searchObjects ?? new List<SearchObject>())
+                .Where(so => so != null && !string.IsNullOrWhiteSpace(so.name))
+                .Where(so =>
+                    so.name.Equals("sku_code", StringComparison.OrdinalIgnoreCase) ||
+                    so.name.Equals("bar_code", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            if (customFilters.Count > 0)
+            {
+                // Remover os filtros custom do builder dinâmico (evita predicate null)
+                pageSearch.searchObjects = (pageSearch.searchObjects ?? new List<SearchObject>())
+                    .Where(so => !customFilters.Contains(so))
+                    .ToList();
+
+                // Aplicar no IQueryable de ViewModel (usa detailList)
+                foreach (var so in customFilters)
+                {
+                    var op = so.@operator; // 0 = igual, 1 = contém (padrão do Swagger)
+                    var val = (so.value ?? so.text)?.ToString() ?? string.Empty;
+                    if (string.IsNullOrWhiteSpace(val)) continue;
+
+                    if (so.name.Equals("sku_code", StringComparison.OrdinalIgnoreCase))
+                    {
+                        query = query.Where(spu =>
+                            spu.detailList != null &&
+                            spu.detailList.Any(d =>
+                                op == 0
+                                    ? d.sku_code == val
+                                    : (d.sku_code ?? string.Empty).Contains(val)
+                            ));
+                    }
+                    else if (so.name.Equals("bar_code", StringComparison.OrdinalIgnoreCase))
+                    {
+                        query = query.Where(spu =>
+                            spu.detailList != null &&
+                            spu.detailList.Any(d =>
+                                op == 0
+                                    ? (d.bar_code ?? string.Empty) == val
+                                    : (d.bar_code ?? string.Empty).Contains(val)
+                            ));
+                    }
+                }
+            }
+            // ====== FIM: Filtro custom sku_code/bar_code ======
+
+            // Reconstrói os filtros genéricos já sem os custom removidos
+            ModernWMS.Core.DynamicSearch.QueryCollection queries = new();
+            if (pageSearch?.searchObjects != null && pageSearch.searchObjects.Any())
+            {
+                pageSearch.searchObjects.ForEach(s => queries.Add(s));
+            }
+
+            // Aplica filtros padrão (campos do topo do SPU)
             query = query.Where(queries.AsExpression<SpuBothViewModel>());
+
             int totals = await query.CountAsync();
             List<SpuBothViewModel> list;
             if (pageSearch.pageIndex <= 0 || pageSearch.pageSize <= 0)
+            {
                 list = await query.OrderByDescending(t => t.create_time).ToListAsync();
+            }
             else
+            {
                 list = await query.OrderByDescending(t => t.create_time)
                                   .Skip((pageSearch.pageIndex - 1) * pageSearch.pageSize)
                                   .Take(pageSearch.pageSize)
                                   .ToListAsync();
+            }
             return (list, totals);
         }
 
