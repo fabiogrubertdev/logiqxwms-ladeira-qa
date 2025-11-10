@@ -407,17 +407,8 @@ const method = reactive({
   sureSearch: () => {
     data.tablePage.searchObjects = setSearchObject(data.searchForm)
     method.getStockAsnList()
-  }
-})
+  },
 
-onMounted(() => {
-  data.btnList = [
-    {
-      name: i18n.global.t('system.page.refresh'),
-      icon: 'mdi-refresh',
-      code: '',
-      click: method.refresh
-    },
   // ⭐ NOVO MÉTODO - Abrir diálogo de importação
   openImportDialog: () => {
     const checkRecords = xTableStockLocation.value.getCheckboxRecords()
@@ -433,10 +424,21 @@ onMounted(() => {
     const selectedAsn = checkRecords[0]
     importPutawayDialogRef.value.openDialog(selectedAsn.id)
   },
+
   // ⭐ NOVO MÉTODO - Callback de sucesso da importação
   importSuccess: () => {
     method.refresh()
-  },
+  }
+})
+
+onMounted(() => {
+  data.btnList = [
+    {
+      name: i18n.global.t('system.page.refresh'),
+      icon: 'mdi-refresh',
+      code: '',
+      click: method.refresh
+    },
     {
       name: i18n.global.t('system.page.export'),
       icon: 'mdi-export-variant',
