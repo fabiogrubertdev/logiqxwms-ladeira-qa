@@ -8,6 +8,13 @@
 
         <!-- new version -->
         <BtnGroup :authority-list="data.authorityList" :btn-list="data.btnList" />
+        
+        <!-- ⭐ NOVO BOTÃO - Importar Excel -->
+        <tooltip-btn 
+          icon="mdi-file-excel" 
+          :tooltip-text="'Importar Excel'"
+          @click="method.openImportDialog">
+        </tooltip-btn>
       </v-col>
 
       <!-- Search Input -->
@@ -123,6 +130,11 @@
       <p>SN:{{ slotData.series_number }}</p>
     </template>
   </qr-code-dialog>
+  <!-- ⭐ NOVO COMPONENTE - Importação de Excel -->
+  <ImportPutawayDialog 
+    ref="importPutawayDialogRef" 
+    @success="method.importSuccess" 
+  />
 </template>
 
 <script lang="ts" setup>
@@ -146,10 +158,12 @@ import BtnGroup from '@/components/system/btnGroup.vue'
 import confirmGroudingDialog from './confirm-grouding.vue'
 import { httpCodeJudge } from '@/utils/http/httpCodeJudge'
 import QrCodeDialog from '@/components/codeDialog/qrCodeDialog.vue'
+import ImportPutawayDialog from './import-putaway-dialog.vue'
 
 const xTableStockLocation = ref()
 const confirmGroudingDialogRef = ref()
 const qrCodeDialogRef = ref()
+const importPutawayDialogRef = ref()
 const currentRow = ref<StockAsnVO | null>(null)
 
 const data = reactive({
@@ -404,6 +418,25 @@ onMounted(() => {
       code: '',
       click: method.refresh
     },
+  // ⭐ NOVO MÉTODO - Abrir diálogo de importação
+  openImportDialog: () => {
+    const checkRecords = xTableStockLocation.value.getCheckboxRecords()
+    
+    if (checkRecords.length !== 1) {
+      hookComponent.$message({
+        type: 'warning',
+        content: 'Selecione apenas 1 ASN para importar'
+      })
+      return
+    }
+    
+    const selectedAsn = checkRecords[0]
+    importPutawayDialogRef.value.openDialog(selectedAsn.id)
+  },
+  // ⭐ NOVO MÉTODO - Callback de sucesso da importação
+  importSuccess: () => {
+    method.refresh()
+  },
     {
       name: i18n.global.t('system.page.export'),
       icon: 'mdi-export-variant',
