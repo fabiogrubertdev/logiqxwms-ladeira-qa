@@ -428,6 +428,8 @@ const method = reactive({
       }
       // Validação 2: SKU existe em "A Armazenar"?
       else if (!data.asnItemsMap.has(validatedRow.sku_code)) {
+        console.log('❌ SKU não encontrado:', validatedRow.sku_code, 'Tipo:', typeof validatedRow.sku_code)
+        console.log('🗺️ SKUs disponíveis no mapa:', Array.from(data.asnItemsMap.keys()))
         validatedRow.status = 'ERRO'
         validatedRow.message = 'SKU não encontrado em "A Armazenar"'
         data.errorCount++
