@@ -1,4 +1,7 @@
-/* ... cabeçalho preservado ... */
+/*
+ * date：2022-12-21
+ * developer：AMo
+ */
 using Mapster;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -92,225 +95,141 @@ namespace ModernWMS.WMS.Services
         }
         #endregion
 
-        #region helpers (PageSearch -> extrair filtros sku_code/bar_code por reflexão)
-        private static (string? skuText, int? skuOp, string? barText, int? barOp) ExtractSkuFilters(PageSearch pageSearch)
-        {
-            string? skuText = null; int? skuOp = null;
-            string? barText = null; int? barOp = null;
-
-            if (pageSearch?.searchObjects == null) return (null, null, null, null);
-
-            foreach (var s in pageSearch.searchObjects)
-            {
-                if (s == null) continue;
-
-                // Nome do campo (name/Name)
-                var nameProp = s.GetType().GetProperty("name") ?? s.GetType().GetProperty("Name");
-                var rawName = nameProp?.GetValue(s) as string;
-                if (string.IsNullOrWhiteSpace(rawName)) continue;
-                var field = rawName.Trim();
-
-                // Operador (operator/Operator)
-                var opProp = s.GetType().GetProperty("operator") ?? s.GetType().GetProperty("Operator");
-                int? op = null;
-                if (opProp != null)
-                {
-                    var opVal = opProp.GetValue(s);
-                    if (opVal is int oi) op = oi;
-                    else if (opVal is byte ob) op = (int)ob;
-                    else if (opVal is short os) op = (int)os;
-                }
-
-                // Texto/valor (text/value)
-                var textProp = s.GetType().GetProperty("text") ?? s.GetType().GetProperty("Text");
-                var valProp  = s.GetType().GetProperty("value") ?? s.GetType().GetProperty("Value");
-                var txt = (textProp?.GetValue(s) as string)?.Trim();
-                var val = valProp?.GetValue(s)?.ToString()?.Trim();
-                var payload = !string.IsNullOrEmpty(txt) ? txt : (!string.IsNullOrEmpty(val) ? val : null);
-
-                if (string.IsNullOrEmpty(payload)) continue;
-
-                if (field.Equals("sku_code", StringComparison.OrdinalIgnoreCase))
-                {
-                    skuText = payload;
-                    skuOp = op ?? 0; // default para igualdade
-                }
-                else if (field.Equals("bar_code", StringComparison.OrdinalIgnoreCase))
-                {
-                    barText = payload;
-                    barOp = op ?? 0;
-                }
-            }
-
-            return (skuText, skuOp, barText, barOp);
-        }
-
-        private static bool MatchByOpEqualsOrLike(string source, string token, int op)
-        {
-            // Apenas para branch client-side (fallback). No EF usamos EF.Functions.Like.
-            if (op == 1) return source?.IndexOf(token, StringComparison.OrdinalIgnoreCase) >= 0;
-            return string.Equals(source, token, StringComparison.OrdinalIgnoreCase);
-        }
-        #endregion
-
         #region Api
+        /// <summary>
+        /// page search (com suporte a filtro por detailList.sku_code)
+        /// </summary>
         public async Task<(List<SpuBothViewModel> data, int totals)> PageAsync(PageSearch pageSearch, CurrentUser currentUser)
         {
-            ModernWMS.Core.DynamicSearch.QueryCollection queries = new();
-            if (pageSearch?.searchObjects != null && pageSearch.searchObjects.Any())
-            {
-                pageSearch.searchObjects.ForEach(s => queries.Add(s));
-            }
-
-            var Categorys = _dBContext.GetDbSet<CategoryEntity>();
-            var Spus = _dBContext.GetDbSet<SpuEntity>();
-            var Skus = _dBContext.GetDbSet<SkuEntity>();
+            // DbSets
+            var Categorys       = _dBContext.GetDbSet<CategoryEntity>();
+            var Spus            = _dBContext.GetDbSet<SpuEntity>();
+            var Skus            = _dBContext.GetDbSet<SkuEntity>();
             var SkuSafetyStocks = _dBContext.GetDbSet<SkuSafetyStockEntity>();
-            var Warehouses = _dBContext.GetDbSet<WarehouseEntity>();
+            var Warehouses      = _dBContext.GetDbSet<WarehouseEntity>();
 
-            // Extraímos filtros especiais para sku_code / bar_code
-            var (skuText, skuOp, barText, barOp) = ExtractSkuFilters(pageSearch);
+            // 1) Separa filtros "seguros" (DynamicSearch) do filtro especial por SKU
+            var rawFilters = pageSearch?.searchObjects ?? new List<ModernWMS.Core.DynamicSearch.SearchObject>();
 
-            // Base (m, c) antes da projeção
-            var baseQuery =
-                from m in Spus.AsNoTracking()
-                join c in Categorys.AsNoTracking() on m.category_id equals c.id
-                where m.tenant_id == currentUser.tenant_id
-                select new { m, c };
+            // Importante: SearchObject usa propriedades PascalCase (Name, Operator, Text, Value, ...)
+            var skuFilters = rawFilters
+                .Where(s => string.Equals(s.Name, "detailList.sku_code", StringComparison.OrdinalIgnoreCase))
+                .ToList();
 
-            // Se houver filtro por sku_code, reduzimos SPUs por existência de SKU matching
-            if (!string.IsNullOrWhiteSpace(skuText))
+            var safeFilters = rawFilters
+                .Where(s => !string.Equals(s.Name, "detailList.sku_code", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            QueryCollection queries = new();
+            if (safeFilters.Any())
             {
-                if ((skuOp ?? 0) == 1) // contains
+                safeFilters.ForEach(s => queries.Add(s));
+            }
+
+            // 2) Base: por tenant
+            IQueryable<SpuEntity> baseSpuQuery = Spus.AsNoTracking()
+                .Where(m => m.tenant_id == currentUser.tenant_id);
+
+            // 3) Aplica filtro especial por SKU (antes da projeção), evitando predicate nulo
+            if (skuFilters.Any())
+            {
+                var f     = skuFilters[0];
+                var token = (f.Text ?? f.Value?.ToString() ?? string.Empty).Trim();
+                var op    = f.Operator; // 0 = Equals, 1 = Contains
+
+                if (!string.IsNullOrEmpty(token))
                 {
-                    baseQuery = baseQuery.Where(x =>
-                        Skus.AsNoTracking().Any(t => t.spu_id == x.m.id &&
-                            EF.Functions.Like(t.sku_code!, "%" + skuText + "%")));
-                }
-                else // equals por default
-                {
-                    baseQuery = baseQuery.Where(x =>
-                        Skus.AsNoTracking().Any(t => t.spu_id == x.m.id && t.sku_code == skuText));
+                    if (op == 0) // Equals
+                    {
+                        baseSpuQuery = baseSpuQuery.Where(m =>
+                            Skus.Any(k => k.spu_id == m.id && k.sku_code == token));
+                    }
+                    else // Contains
+                    {
+                        baseSpuQuery = baseSpuQuery.Where(m =>
+                            Skus.Any(k => k.spu_id == m.id && k.sku_code.Contains(token)));
+                    }
                 }
             }
 
-            // Se houver filtro por bar_code, idem
-            if (!string.IsNullOrWhiteSpace(barText))
-            {
-                if ((barOp ?? 0) == 1) // contains
-                {
-                    baseQuery = baseQuery.Where(x =>
-                        Skus.AsNoTracking().Any(t => t.spu_id == x.m.id &&
-                            t.bar_code != null &&
-                            EF.Functions.Like(t.bar_code!, "%" + barText + "%")));
-                }
-                else // equals
-                {
-                    baseQuery = baseQuery.Where(x =>
-                        Skus.AsNoTracking().Any(t => t.spu_id == x.m.id &&
-                            t.bar_code != null && t.bar_code == barText));
-                }
-            }
-
-            // Capturas locais para usar dentro da projeção (detalhe)
-            string? skuTextLocal = skuText;
-            int skuOpLocal = skuOp ?? -1;
-            string? barTextLocal = barText;
-            int barOpLocal = barOp ?? -1;
-
-            // Projeção final (SpuBothViewModel)
-            var query =
-                from bc in baseQuery
-                select new SpuBothViewModel
-                {
-                    id = bc.m.id,
-                    spu_code = bc.m.spu_code,
-                    spu_name = bc.m.spu_name,
-                    category_id = bc.m.category_id,
-                    category_name = bc.c.category_name,
-                    spu_description = bc.m.spu_code, // preservado do seu código atual
-                    supplier_id = bc.m.supplier_id,
-                    supplier_name = bc.m.supplier_name,
-                    brand = bc.m.brand,
-                    origin = bc.m.origin,
-                    length_unit = bc.m.length_unit,
-                    volume_unit = bc.m.volume_unit,
-                    weight_unit = bc.m.weight_unit,
-                    creator = bc.m.creator,
-                    create_time = bc.m.create_time,
-                    last_update_time = bc.m.last_update_time,
-                    is_valid = bc.m.is_valid,
-
-                    detailList =
-                        (
-                            from t in Skus.AsNoTracking()
-                            where t.spu_id == bc.m.id
-                                  // Se houver filtro de sku_code/bar_code, aplica também no detalhe
-                                  && (
-                                        string.IsNullOrEmpty(skuTextLocal)
-                                        ? true
-                                        : (skuOpLocal == 1
-                                            ? EF.Functions.Like(t.sku_code!, "%" + skuTextLocal + "%")
-                                            : t.sku_code == skuTextLocal)
-                                     )
-                                  && (
-                                        string.IsNullOrEmpty(barTextLocal)
-                                        ? true
-                                        : (t.bar_code != null && (
-                                                barOpLocal == 1
-                                                ? EF.Functions.Like(t.bar_code!, "%" + barTextLocal + "%")
-                                                : t.bar_code == barTextLocal
-                                            ))
-                                     )
-                            select new SkuViewModel
+            // 4) Projeção
+            var projected = from m in baseSpuQuery
+                            join c in Categorys.AsNoTracking() on m.category_id equals c.id
+                            select new SpuBothViewModel
                             {
-                                id = t.id,
-                                spu_id = t.spu_id,
-                                sku_code = t.sku_code,
-                                sku_name = t.sku_name,
-                                image_url = t.image_url,
-                                bar_code = t.bar_code,
-                                weight = t.weight,
-                                lenght = t.lenght,
-                                width = t.width,
-                                height = t.height,
-                                volume = t.volume,
-                                unit = t.unit,
-                                cost = t.cost,
-                                price = t.price,
-                                create_time = t.create_time,
-                                last_update_time = t.last_update_time,
-                                detailList =
-                                    (
-                                        from sss in SkuSafetyStocks.AsNoTracking()
-                                        join wh in Warehouses on sss.warehouse_id equals wh.id
-                                        where sss.sku_id == t.id
-                                        select new SkuSafetyStockViewModel
-                                        {
-                                            id = sss.id,
-                                            sku_id = sss.sku_id,
-                                            safety_stock_qty = sss.safety_stock_qty,
-                                            warehouse_id = sss.warehouse_id,
-                                            warehouse_name = wh.warehouse_name
-                                        }
-                                    ).ToList()
-                            }
-                        ).ToList()
-                };
+                                id = m.id,
+                                spu_code = m.spu_code,
+                                spu_name = m.spu_name,
+                                category_id = m.category_id,
+                                category_name = c.category_name,
+                                spu_description = m.spu_code,
+                                supplier_id = m.supplier_id,
+                                supplier_name = m.supplier_name,
+                                brand = m.brand,
+                                origin = m.origin,
+                                length_unit = m.length_unit,
+                                volume_unit = m.volume_unit,
+                                weight_unit = m.weight_unit,
+                                creator = m.creator,
+                                create_time = m.create_time,
+                                last_update_time = m.last_update_time,
+                                is_valid = m.is_valid,
+                                detailList = Skus.AsNoTracking().Where(t => t.spu_id.Equals(m.id))
+                                    .Select(t => new SkuViewModel
+                                    {
+                                        id = t.id,
+                                        spu_id = t.spu_id,
+                                        sku_code = t.sku_code,
+                                        sku_name = t.sku_name,
+                                        image_url = t.image_url,
+                                        bar_code = t.bar_code,
+                                        weight = t.weight,
+                                        lenght = t.lenght,
+                                        width = t.width,
+                                        height = t.height,
+                                        volume = t.volume,
+                                        unit = t.unit,
+                                        cost = t.cost,
+                                        price = t.price,
+                                        create_time = t.create_time,
+                                        last_update_time = t.last_update_time,
+                                        detailList = (from sss in SkuSafetyStocks.AsNoTracking()
+                                                      join wh in Warehouses on sss.warehouse_id equals wh.id
+                                                      where sss.sku_id.Equals(t.id)
+                                                      select new SkuSafetyStockViewModel
+                                                      {
+                                                          id = sss.id,
+                                                          sku_id = sss.sku_id,
+                                                          safety_stock_qty = sss.safety_stock_qty,
+                                                          warehouse_id = sss.warehouse_id,
+                                                          warehouse_name = wh.warehouse_name
+                                                      }).ToList()
+                                    }).ToList()
+                            };
 
-            // Mantém o mecanismo de busca dinâmica (para campos do SPU):
-            query = query.Where(queries.AsExpression<SpuBothViewModel>());
+            // 5) Filtros "seguros" (DynamicSearch) — aplica só se houver predicate
+            var predicate = queries.AsExpression<SpuBothViewModel>();
+            if (predicate != null)
+            {
+                projected = projected.Where(predicate);
+            }
 
-            int totals = await query.CountAsync();
-
+            // 6) Totais e paginação (inalterado)
+            int totals;
             List<SpuBothViewModel> list;
-            if (pageSearch == null || pageSearch.pageIndex <= 0 || pageSearch.pageSize <= 0)
-                list = await query.OrderByDescending(t => t.create_time).ToListAsync();
+            if (pageSearch.pageIndex <= 0 || pageSearch.pageSize <= 0)
+            {
+                totals = await projected.CountAsync();
+                list = await projected.OrderByDescending(t => t.create_time).ToListAsync();
+            }
             else
-                list = await query.OrderByDescending(t => t.create_time)
-                                  .Skip((pageSearch.pageIndex - 1) * pageSearch.pageSize)
-                                  .Take(pageSearch.pageSize)
-                                  .ToListAsync();
+            {
+                totals = await projected.CountAsync();
+                list = await projected.OrderByDescending(t => t.create_time)
+                                      .Skip((pageSearch.pageIndex - 1) * pageSearch.pageSize)
+                                      .Take(pageSearch.pageSize)
+                                      .ToListAsync();
+            }
 
             return (list, totals);
         }
