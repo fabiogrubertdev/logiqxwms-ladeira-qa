@@ -136,6 +136,17 @@
             
             <vxe-column field="series_number" title="Número de Série" width="150"></vxe-column>
             
+            <vxe-column field="asn_id" title="ASN ID" width="100" align="center">
+              <template #default="{ row }">
+                <v-chip 
+                  size="small" 
+                  :color="row.asn_id ? 'info' : 'default'"
+                >
+                  {{ row.asn_id || '-' }}
+                </v-chip>
+              </template>
+            </vxe-column>
+            
             <vxe-column field="sorted_qty_available" title="Qtd Disponível" width="120" align="right">
               <template #default="{ row }">
                 <v-chip 
@@ -380,6 +391,7 @@ const method = reactive({
         location_name: row['Endereço'] || row['Endereco'] || row['location_name'] || row['Localização'] || row['Localizacao'] || '',
         putaway_qty: parseInt(row['Quantidade'] || row['quantidade'] || row['putaway_qty'] || row['Qtd'] || '0'),
         series_number: row['Número de Série'] || row['Numero de Serie'] || row['series_number'] || row['SN'] || '',
+        asn_id: null, // ID do item do detailList
         status: 'OK',
         message: '',
         location_found: false,
@@ -410,6 +422,7 @@ const method = reactive({
       // Validação 3: Quantidade não excede disponível
       else {
         const asnItem = data.asnItemsMap.get(validatedRow.sku_code)
+        validatedRow.asn_id = asnItem.id // ID do item do detailList
         validatedRow.sorted_qty_available = asnItem.sorted_qty
         
         if (validatedRow.putaway_qty > asnItem.sorted_qty) {
@@ -498,7 +511,7 @@ const method = reactive({
           const asnItem = data.asnItemsMap.get(row.sku_code)
           
           putawayList.push({
-            asn_id: asnItem.id, // ID do item do detailList
+            asn_id: row.asn_id, // ID do item do detailList (já validado)
             goods_owner_id: asnItem.goods_owner_id || 0,
             series_number: row.series_number || '',
             goods_location_id: row.location_id,
