@@ -383,6 +383,10 @@ const method = reactive({
    * Validar dados do Excel
    */
   validateData: async (excelData: any[]) => {
+    console.log('🔍 INICIANDO VALIDAÇÃO')
+    console.log('🗺️ Tamanho do mapa no início da validação:', data.asnItemsMap.size)
+    console.log('🗺️ Conteúdo do mapa:', Array.from(data.asnItemsMap.entries()))
+    
     data.previewData = []
     data.validCount = 0
     data.errorCount = 0
