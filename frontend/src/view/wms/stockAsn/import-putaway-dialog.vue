@@ -222,9 +222,8 @@
 import { reactive, ref } from 'vue'
 import * as XLSX from 'xlsx'
 import { hookComponent } from '@/components/system'
-import { confirmPutaway } from '@/api/wms/stockAsn'
+import { confirmPutaway, listNew } from '@/api/wms/stockAsn'
 import { getLocationByName } from '@/api/wms/goodsLocation'
-import { getGrouding } from '@/api/wms/stockAsn'
 import i18n from '@/languages/i18n'
 
 const xTable = ref()
@@ -243,22 +242,22 @@ const data = reactive({
   processing: false,
   asnItemsMap: new Map(), // Mapa: sku_code → asn_item completo
   locationsCache: new Map(), // Cache: location_name → location_data
-  currentAsnId: null as number | null
+  currentAsnNo: null as string | null
 })
 
 const method = reactive({
   /**
    * Abrir diálogo
    */
-  openDialog: async (asnId: number) => {
-    data.currentAsnId = asnId
+  openDialog: async (asnNo: string) => {
+    data.currentAsnNo = asnNo
     data.previewData = []
     data.excelFile = null
     data.validCount = 0
     data.errorCount = 0
     
     // Carregar itens disponíveis para armazenamento
-    await method.loadAsnItems(asnId)
+    await method.loadAsnItems(asnNo)
     
     data.showDialog = true
   },
@@ -277,17 +276,40 @@ const method = reactive({
   /**
    * Carregar itens disponíveis para armazenamento
    */
-  loadAsnItems: async (asnId: number) => {
+   loadAsnItems: async (asnNo: string) => {
     try {
-      const { data: res } = await getGrouding(asnId)
+      // Buscar dados do ASN usando /asn/asnmaster/list
+      const { data: res } = await listNew({
+        pageIndex: 1,
+        pageSize: 1,
+        searchObjects: [
+          {
+            name: 'asn_no',
+            operator: 1, // Contains
+            text: asnNo,
+            value: asnNo
+          }
+        ]
+      })
       
-      if (res.isSuccess && res.data) {
-        // Criar mapa: sku_code → item completo
-        res.data.forEach((item: any) => {
+      if (res.isSuccess && res.data && res.data.rows && res.data.rows.length > 0) {
+        const asnMaster = res.data.rows[0]
+        const detailList = asnMaster.detailList || []
+        
+        // Filtrar apenas itens com status 3 (A Armazenar)
+        const itemsToStore = detailList.filter((item: any) => item.asn_status === 3)
+        
+        // Criar mapa: sku_code → item completo do detailList
+        itemsToStore.forEach((item: any) => {
           data.asnItemsMap.set(item.sku_code, item)
         })
         
-        console.log(`Carregados ${data.asnItemsMap.size} itens para armazenamento`)
+        console.log(`Carregados ${data.asnItemsMap.size} itens para armazenamento do ASN ${asnNo}`)
+      } else {
+        hookComponent.$message({
+          type: 'warning',
+          content: 'ASN não encontrado ou sem itens pendentes de armazenamento'
+        })
       }
     } catch (error) {
       console.error('Erro ao carregar itens:', error)
@@ -476,8 +498,8 @@ const method = reactive({
           const asnItem = data.asnItemsMap.get(row.sku_code)
           
           putawayList.push({
-            asn_id: asnItem.asn_id,
-            goods_owner_id: asnItem.goods_owner_id,
+            asn_id: asnItem.id, // ID do item do detailList
+            goods_owner_id: asnItem.goods_owner_id || 0,
             series_number: row.series_number || '',
             goods_location_id: row.location_id,
             putaway_qty: row.putaway_qty

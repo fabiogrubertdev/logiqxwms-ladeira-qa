@@ -422,7 +422,7 @@ const method = reactive({
     }
     
     const selectedAsn = checkRecords[0]
-    importPutawayDialogRef.value.openDialog(selectedAsn.id)
+    importPutawayDialogRef.value.openDialog(selectedAsn.asn_no)
   },
 
   // ⭐ NOVO MÉTODO - Callback de sucesso da importação
