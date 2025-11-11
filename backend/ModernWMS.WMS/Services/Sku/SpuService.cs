@@ -1,6 +1,6 @@
 /*
  * date：2022-12-21
- * developer：AMoo
+ * developer：AMooo
  */
 using Mapster;
 using Microsoft.AspNetCore.Hosting;
