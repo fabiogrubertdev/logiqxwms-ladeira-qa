@@ -303,19 +303,28 @@ const method = reactive({
         ]
       })
       
+      console.log('⚡ Resposta da API listNew:', res)
+      
       if (res.isSuccess && res.data && res.data.rows && res.data.rows.length > 0) {
         const asnMaster = res.data.rows[0]
+        console.log('📦 ASN Master:', asnMaster)
+        
         const detailList = asnMaster.detailList || []
+        console.log(`📝 Total de itens no detailList: ${detailList.length}`)
         
         // Filtrar apenas itens com status 3 (A Armazenar)
         const itemsToStore = detailList.filter((item: any) => item.asn_status === 3)
+        console.log(`✅ Itens com status 3 (A Armazenar): ${itemsToStore.length}`)
+        console.log('📊 Itens filtrados:', itemsToStore)
         
         // Criar mapa: sku_code → item completo do detailList
         itemsToStore.forEach((item: any) => {
+          console.log(`🔑 Adicionando ao mapa: ${item.sku_code} → id: ${item.id}`)
           data.asnItemsMap.set(item.sku_code, item)
         })
         
-        console.log(`Carregados ${data.asnItemsMap.size} itens para armazenamento do ASN ${asnNo}`)
+        console.log(`✅ Carregados ${data.asnItemsMap.size} itens para armazenamento do ASN ${asnNo}`)
+        console.log('🗺️ Mapa final:', Array.from(data.asnItemsMap.entries()))
       } else {
         hookComponent.$message({
           type: 'warning',
