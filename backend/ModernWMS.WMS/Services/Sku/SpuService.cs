@@ -120,7 +120,7 @@ namespace ModernWMS.WMS.Services
                 .Where(s => !string.Equals(s.Name, "detailList.sku_code", StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
-            QueryCollection queries = new();
+            ModernWMS.Core.DynamicSearch.QueryCollection queries = new();
             if (safeFilters.Any())
             {
                 safeFilters.ForEach(s => queries.Add(s));
