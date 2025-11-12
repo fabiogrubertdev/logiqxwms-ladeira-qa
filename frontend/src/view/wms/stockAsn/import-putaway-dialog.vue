@@ -472,6 +472,12 @@ const method = reactive({
     console.log('📊 PREVIEW DATA FINAL:', data.previewData)
     console.log('📊 Total de linhas no previewData:', data.previewData.length)
     
+    // Forçar refresh da tabela
+    if (xTable.value) {
+      console.log('🔄 Forçando refresh da tabela...')
+      xTable.value.syncData()
+    }
+    
     hookComponent.$message({
       type: data.errorCount > 0 ? 'warning' : 'success',
       content: `Validação concluída: ${data.validCount} válidos, ${data.errorCount} com erro`
