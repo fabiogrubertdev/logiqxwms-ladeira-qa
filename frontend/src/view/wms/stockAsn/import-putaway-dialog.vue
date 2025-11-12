@@ -319,8 +319,9 @@ const method = reactive({
         
         // Criar mapa: sku_code → item completo do detailList
         itemsToStore.forEach((item: any) => {
-          console.log(`🔑 Adicionando ao mapa: ${item.sku_code} → id: ${item.id}`)
-          data.asnItemsMap.set(item.sku_code, item)
+          const skuKey = String(item.sku_code).trim()
+          console.log(`🔑 Adicionando ao mapa: ${skuKey} → id: ${item.id}`)
+          data.asnItemsMap.set(skuKey, item)
         })
         
         console.log(`✅ Carregados ${data.asnItemsMap.size} itens para armazenamento do ASN ${asnNo}`)
@@ -383,9 +384,6 @@ const method = reactive({
    * Validar dados do Excel
    */
   validateData: async (excelData: any[]) => {
-    console.log('🔍 INICIANDO VALIDAÇÃO')
-    console.log('🗺️ Tamanho do mapa no início da validação:', data.asnItemsMap.size)
-    console.log('🗺️ Conteúdo do mapa:', Array.from(data.asnItemsMap.entries()))
     
     data.previewData = []
     data.validCount = 0
@@ -400,7 +398,7 @@ const method = reactive({
       const row = excelData[i]
       
       const validatedRow: any = {
-        sku_code: row['SKU'] || row['sku_code'] || row['Código'] || '',
+        sku_code: String(row['SKU'] || row['sku_code'] || row['Código'] || '').trim(),
         location_name: row['Endereço'] || row['Endereco'] || row['location_name'] || row['Localização'] || row['Localizacao'] || '',
         putaway_qty: parseInt(row['Quantidade'] || row['quantidade'] || row['putaway_qty'] || row['Qtd'] || '0'),
         series_number: row['Número de Série'] || row['Numero de Serie'] || row['series_number'] || row['SN'] || '',
@@ -428,8 +426,6 @@ const method = reactive({
       }
       // Validação 2: SKU existe em "A Armazenar"?
       else if (!data.asnItemsMap.has(validatedRow.sku_code)) {
-        console.log('❌ SKU não encontrado:', validatedRow.sku_code, 'Tipo:', typeof validatedRow.sku_code)
-        console.log('🗺️ SKUs disponíveis no mapa:', Array.from(data.asnItemsMap.keys()))
         validatedRow.status = 'ERRO'
         validatedRow.message = 'SKU não encontrado em "A Armazenar"'
         data.errorCount++
