@@ -469,6 +469,9 @@ const method = reactive({
       data.previewData.push(validatedRow)
     }
     
+    console.log('📊 PREVIEW DATA FINAL:', data.previewData)
+    console.log('📊 Total de linhas no previewData:', data.previewData.length)
+    
     hookComponent.$message({
       type: data.errorCount > 0 ? 'warning' : 'success',
       content: `Validação concluída: ${data.validCount} válidos, ${data.errorCount} com erro`
