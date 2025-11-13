@@ -320,9 +320,11 @@ const method = reactive({
         const detailList = asnMaster.detailList || []
         console.log(`📝 Total de itens no detailList: ${detailList.length}`)
         
-        // Filtrar apenas itens com status 3 (A Armazenar)
-        const itemsToStore = detailList.filter((item: any) => item.asn_status === 3)
-        console.log(`✅ Itens com status 3 (A Armazenar): ${itemsToStore.length}`)
+        // Filtrar baseado no mode
+        const targetStatus = props.mode === 'sorting' ? 2 : 3
+        const statusName = props.mode === 'sorting' ? 'A Separar' : 'A Armazenar'
+        const itemsToStore = detailList.filter((item: any) => item.asn_status === targetStatus)
+        console.log(`✅ Itens com status ${targetStatus} (${statusName}): ${itemsToStore.length}`)
         console.log('📊 Itens filtrados:', itemsToStore)
         
         // Criar mapa: sku_code → item completo do detailList
@@ -335,16 +337,18 @@ const method = reactive({
         console.log(`✅ Carregados ${data.asnItemsMap.size} itens para armazenamento do ASN ${asnNo}`)
         console.log('🗺️ Mapa final:', Array.from(data.asnItemsMap.entries()))
       } else {
+        const statusName = props.mode === 'sorting' ? 'separação' : 'armazenamento'
         hookComponent.$message({
           type: 'warning',
-          content: 'ASN não encontrado ou sem itens pendentes de armazenamento'
+          content: `ASN não encontrado ou sem itens pendentes de ${statusName}`
         })
       }
     } catch (error) {
       console.error('Erro ao carregar itens:', error)
+      const statusName = props.mode === 'sorting' ? 'separação' : 'armazenamento'
       hookComponent.$message({
         type: 'error',
-        content: 'Erro ao carregar itens disponíveis para armazenamento'
+        content: `Erro ao carregar itens disponíveis para ${statusName}`
       })
     }
   },
