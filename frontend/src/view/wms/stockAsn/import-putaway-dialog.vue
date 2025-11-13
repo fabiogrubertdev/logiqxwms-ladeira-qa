@@ -303,29 +303,19 @@ const method = reactive({
         ]
       })
       
-      console.log('⚡ Resposta da API listNew:', res)
-      
       if (res.isSuccess && res.data && res.data.rows && res.data.rows.length > 0) {
         const asnMaster = res.data.rows[0]
-        console.log('📦 ASN Master:', asnMaster)
-        
         const detailList = asnMaster.detailList || []
-        console.log(`📝 Total de itens no detailList: ${detailList.length}`)
         
         // Filtrar apenas itens com status 3 (A Armazenar)
         const itemsToStore = detailList.filter((item: any) => item.asn_status === 3)
-        console.log(`✅ Itens com status 3 (A Armazenar): ${itemsToStore.length}`)
-        console.log('📊 Itens filtrados:', itemsToStore)
         
         // Criar mapa: sku_code → item completo do detailList
         itemsToStore.forEach((item: any) => {
-          const skuKey = String(item.sku_code).trim()
-          console.log(`🔑 Adicionando ao mapa: ${skuKey} → id: ${item.id}`)
-          data.asnItemsMap.set(skuKey, item)
+          data.asnItemsMap.set(item.sku_code, item)
         })
         
-        console.log(`✅ Carregados ${data.asnItemsMap.size} itens para armazenamento do ASN ${asnNo}`)
-        console.log('🗺️ Mapa final:', Array.from(data.asnItemsMap.entries()))
+        console.log(`Carregados ${data.asnItemsMap.size} itens para armazenamento do ASN ${asnNo}`)
       } else {
         hookComponent.$message({
           type: 'warning',
@@ -384,7 +374,6 @@ const method = reactive({
    * Validar dados do Excel
    */
   validateData: async (excelData: any[]) => {
-    
     data.previewData = []
     data.validCount = 0
     data.errorCount = 0
@@ -398,7 +387,7 @@ const method = reactive({
       const row = excelData[i]
       
       const validatedRow: any = {
-        sku_code: String(row['SKU'] || row['sku_code'] || row['Código'] || '').trim(),
+        sku_code: row['SKU'] || row['sku_code'] || row['Código'] || '',
         location_name: row['Endereço'] || row['Endereco'] || row['location_name'] || row['Localização'] || row['Localizacao'] || '',
         putaway_qty: parseInt(row['Quantidade'] || row['quantidade'] || row['putaway_qty'] || row['Qtd'] || '0'),
         series_number: row['Número de Série'] || row['Numero de Serie'] || row['series_number'] || row['SN'] || '',
