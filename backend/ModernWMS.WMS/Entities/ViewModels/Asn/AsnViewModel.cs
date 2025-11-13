@@ -265,6 +265,13 @@ namespace ModernWMS.WMS.Entities.ViewModels
         [Display(Name = "price")]
         public decimal price { get; set; } = 0;
 
+        /// <summary>
+        /// goods_location_name
+        /// </summary>
+        [Display(Name = "goods_location_name")]
+        [MaxLength(50, ErrorMessage = "MaxLength")]
+        public string? goods_location_name { get; set; } = string.Empty;
+
         #endregion
 
     }

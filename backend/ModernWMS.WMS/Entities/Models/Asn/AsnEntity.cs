@@ -170,6 +170,11 @@ namespace ModernWMS.WMS.Entities.Models
         /// price
         /// </summary>
         public decimal price { get; set; } = 0;
+
+        /// <summary>
+        /// goods_location_name
+        /// </summary>
+        public string? goods_location_name { get; set; } = string.Empty;
         #endregion
 
     }
