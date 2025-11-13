@@ -50,7 +50,7 @@
         </v-row>
         
         <!-- Resumo -->
-        <v-row v-if="previewData.length > 0" class="mb-4">
+        <v-row v-if="data.previewData.length > 0" class="mb-4">
           <v-col cols="12">
             <v-alert 
               :type="data.errorCount > 0 ? 'warning' : 'success'" 
@@ -59,7 +59,7 @@
             >
               <v-row align="center">
                 <v-col cols="3">
-                  <div class="text-h6">Total: {{ previewData.length }}</div>
+                  <div class="text-h6">Total: {{ data.previewData.length }}</div>
                 </v-col>
                 <v-col cols="3">
                   <div class="text-h6 text-success">Válidos: {{ data.validCount }}</div>
@@ -69,11 +69,11 @@
                 </v-col>
                 <v-col cols="3">
                   <v-progress-linear
-                    :model-value="(data.validCount / previewData.length) * 100"
+                    :model-value="(data.validCount / data.previewData.length) * 100"
                     :color="data.errorCount > 0 ? 'warning' : 'success'"
                     height="25"
                   >
-                    <strong>{{ Math.round((data.validCount / previewData.length) * 100) }}%</strong>
+                    <strong>{{ Math.round((data.validCount / data.previewData.length) * 100) }}%</strong>
                   </v-progress-linear>
                 </v-col>
               </v-row>
@@ -82,14 +82,14 @@
         </v-row>
         
         <!-- Preview dos Dados -->
-        <v-card v-if="previewData.length > 0" variant="outlined">
+        <v-card v-if="data.previewData.length > 0" variant="outlined">
           <v-card-title class="bg-grey-lighten-4">
             <v-icon left>mdi-table-eye</v-icon>
             Preview dos Dados
           </v-card-title>
           <vxe-table
             ref="xTable"
-            :data="previewData"
+            :data="data.previewData"
             :height="400"
             align="center"
             :row-class-name="method.rowClassName"
@@ -230,7 +230,7 @@
 </template>
 
 <script lang="ts" setup>
-import { reactive, ref, nextTick } from 'vue'
+import { reactive, ref } from 'vue'
 import * as XLSX from 'xlsx'
 import { hookComponent } from '@/components/system'
 import { confirmPutaway, listNew } from '@/api/wms/stockAsn'
@@ -239,7 +239,6 @@ import i18n from '@/languages/i18n'
 
 const xTable = ref()
 const emit = defineEmits(['success'])
-const previewData = ref<any[]>([])
 
 const data = reactive({
   showDialog: false,
@@ -248,6 +247,7 @@ const data = reactive({
     { warehouse_id: 1, warehouse_name: '0009' }
   ],
   excelFile: null as any,
+  previewData: [] as any[],
   validCount: 0,
   errorCount: 0,
   processing: false,
@@ -262,7 +262,7 @@ const method = reactive({
    */
   openDialog: async (asnNo: string) => {
     data.currentAsnNo = asnNo
-    previewData.value = []
+    data.previewData = []
     data.excelFile = null
     data.validCount = 0
     data.errorCount = 0
@@ -278,7 +278,7 @@ const method = reactive({
    */
   closeDialog: () => {
     data.showDialog = false
-    previewData.value = []
+    data.previewData = []
     data.excelFile = null
     data.asnItemsMap.clear()
     data.locationsCache.clear()
@@ -385,7 +385,7 @@ const method = reactive({
    */
   validateData: async (excelData: any[]) => {
     
-    previewData.value = []
+    data.previewData = []
     data.validCount = 0
     data.errorCount = 0
     
@@ -466,15 +466,8 @@ const method = reactive({
         }
       }
       
-      previewData.value.push(validatedRow)
+      data.previewData.push(validatedRow)
     }
-    
-    // Forçar criação de array simples sem proxy do Vue
-    const plainArray = JSON.parse(JSON.stringify(previewData.value))
-    previewData.value = plainArray
-    
-    // Aguardar próximo tick do Vue para garantir renderização
-    await nextTick()
     
     hookComponent.$message({
       type: data.errorCount > 0 ? 'warning' : 'success',
@@ -524,7 +517,7 @@ const method = reactive({
       // Preparar payload para API
       const putawayList: any[] = []
       
-      for (const row of previewData.value) {
+      for (const row of data.previewData) {
         if (row.status === 'OK') {
           const asnItem = data.asnItemsMap.get(row.sku_code)
           
