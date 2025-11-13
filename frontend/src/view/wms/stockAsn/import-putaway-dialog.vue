@@ -540,18 +540,37 @@ const method = reactive({
       
       console.log('🚀 PAYLOAD COMPLETO:', JSON.stringify(putawayList, null, 2))
       console.log('📊 Total de itens no payload:', putawayList.length)
-      putawayList.forEach((item, index) => {
-        console.log(`📦 Item ${index}:`, item)
-      })
       
-      // Chamar API de armazenamento
-      const logTemp = {} // Pode adicionar informações de log se necessário
-      const { data: res } = await confirmPutaway(putawayList, logTemp)
+      // Processar um item por vez
+      let successCount = 0
+      let errorCount = 0
+      const logTemp = {}
       
-      if (res.isSuccess) {
+      for (let i = 0; i < putawayList.length; i++) {
+        const item = putawayList[i]
+        console.log(`📦 Processando item ${i + 1}/${putawayList.length}:`, item)
+        
+        try {
+          // Enviar array com apenas 1 item
+          const { data: res } = await confirmPutaway([item], logTemp)
+          
+          if (res.isSuccess) {
+            successCount++
+            console.log(`✅ Item ${i + 1} processado com sucesso`)
+          } else {
+            errorCount++
+            console.error(`❌ Erro no item ${i + 1}:`, res.errorMessage)
+          }
+        } catch (error) {
+          errorCount++
+          console.error(`❌ Erro ao processar item ${i + 1}:`, error)
+        }
+      }
+      
+      if (successCount > 0) {
         hookComponent.$message({
-          type: 'success',
-          content: `${putawayList.length} itens armazenados com sucesso!`
+          type: errorCount > 0 ? 'warning' : 'success',
+          content: `${successCount} itens armazenados com sucesso!${errorCount > 0 ? ` (${errorCount} com erro)` : ''}`
         })
         
         emit('success')
@@ -559,7 +578,7 @@ const method = reactive({
       } else {
         hookComponent.$message({
           type: 'error',
-          content: res.errorMessage || 'Erro ao processar armazenamento'
+          content: 'Todos os itens falharam ao processar'
         })
       }
     } catch (error: any) {
