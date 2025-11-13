@@ -180,6 +180,13 @@ namespace ModernWMS.WMS.Entities.ViewModels
         /// </summary>
         public DateTime putaway_date { get; set; } = UtilConvert.MinDate;
 
+        /// <summary>
+        /// goods_location_name
+        /// </summary>
+        [Display(Name = "goods_location_name")]
+        [MaxLength(50, ErrorMessage = "MaxLength")]
+        public string? goods_location_name { get; set; } = string.Empty;
+
 
         #endregion
 
