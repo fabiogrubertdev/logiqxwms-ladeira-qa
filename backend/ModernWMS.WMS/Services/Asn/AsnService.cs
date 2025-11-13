@@ -1461,5 +1461,49 @@ namespace ModernWMS.WMS.Services
         }
 
         #endregion
+
+        #region update location
+        /// <summary>
+        /// Update goods_location_name for ASN items
+        /// </summary>
+        /// <param name="viewModels">list of asn_id and goods_location_name</param>
+        /// <returns></returns>
+        public async Task<(bool flag, string msg)> UpdateLocationAsync(List<AsnUpdateLocationViewModel> viewModels)
+        {
+            if (viewModels == null || !viewModels.Any())
+            {
+                return (false, _stringLocalizer["param_error"]);
+            }
+
+            var Asns = _dBContext.GetDbSet<AsnEntity>();
+            var asnIds = viewModels.Select(v => v.asn_id).ToList();
+            var entities = await Asns.Where(a => asnIds.Contains(a.id)).ToListAsync();
+
+            if (!entities.Any())
+            {
+                return (false, _stringLocalizer["not_exists_entity"]);
+            }
+
+            foreach (var entity in entities)
+            {
+                var viewModel = viewModels.FirstOrDefault(v => v.asn_id == entity.id);
+                if (viewModel != null)
+                {
+                    entity.goods_location_name = viewModel.goods_location_name;
+                    entity.last_update_time = DateTime.Now;
+                }
+            }
+
+            var qty = await _dBContext.SaveChangesAsync();
+            if (qty > 0)
+            {
+                return (true, _stringLocalizer["save_success"]);
+            }
+            else
+            {
+                return (false, _stringLocalizer["save_failed"]);
+            }
+        }
+        #endregion
     }
 }

@@ -473,6 +473,27 @@ namespace ModernWMS.WMS.Controllers
             return ResultModel<List<AsnPrintSeriesNumberViewModel>>.Success(data);
         }
         #endregion
+
+        #region update location
+        /// <summary>
+        /// Update goods_location_name for ASN items
+        /// </summary>
+        /// <param name="viewModels">list of asn_id and goods_location_name</param>
+        /// <returns></returns>
+        [HttpPatch("update-location")]
+        public async Task<ResultModel<string>> UpdateLocationAsync(List<AsnUpdateLocationViewModel> viewModels)
+        {
+            var (flag, msg) = await _asnService.UpdateLocationAsync(viewModels);
+            if (flag)
+            {
+                return ResultModel<string>.Success(msg);
+            }
+            else
+            {
+                return ResultModel<string>.Error(msg);
+            }
+        }
+        #endregion
     }
 }
  

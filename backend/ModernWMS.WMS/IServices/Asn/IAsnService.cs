@@ -196,6 +196,15 @@ namespace ModernWMS.WMS.IServices
         /// <returns></returns>
         Task<List<AsnPrintSeriesNumberViewModel>> GetAsnPrintSeriesNumberAsync(List<int> input);
         #endregion
+
+        #region update location
+        /// <summary>
+        /// Update goods_location_name for ASN items
+        /// </summary>
+        /// <param name="viewModels">list of asn_id and goods_location_name</param>
+        /// <returns></returns>
+        Task<(bool flag, string msg)> UpdateLocationAsync(List<AsnUpdateLocationViewModel> viewModels);
+        #endregion
     }
 }
  
