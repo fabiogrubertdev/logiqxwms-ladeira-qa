@@ -1153,6 +1153,7 @@ namespace ModernWMS.WMS.Services
                                               expiry_date = a.expiry_date,
                                               price = a.price,
                                               sorted_qty = a.sorted_qty,
+                                              goods_location_name = a.goods_location_name
                                           }).ToList()
                         };
             query = query.Where(queries.AsExpression<AsnmasterBothViewModel>());
@@ -1240,7 +1241,8 @@ namespace ModernWMS.WMS.Services
                                               is_valid = a.is_valid,
                                               sorted_qty = a.sorted_qty,
                                               expiry_date = a.expiry_date,
-                                              price = a.price
+                                              price = a.price,
+                                              goods_location_name = a.goods_location_name
                                           }).ToList()
                         };
             var data = await query.FirstOrDefaultAsync();
