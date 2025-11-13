@@ -2,7 +2,7 @@
   <v-dialog v-model="data.showDialog" :width="'90%'" :persistent="true" scrollable>
     <v-card>
       <v-toolbar color="primary" dark>
-        <v-toolbar-title>Importar Armazenamento via Excel</v-toolbar-title>
+        <v-toolbar-title>{{ props.mode === 'sorting' ? 'Importar Endereços de Separação via Excel' : 'Importar Armazenamento via Excel' }}</v-toolbar-title>
         <v-spacer></v-spacer>
         <v-btn icon @click="method.closeDialog">
           <v-icon>mdi-close</v-icon>
@@ -235,7 +235,15 @@ import * as XLSX from 'xlsx'
 import { hookComponent } from '@/components/system'
 import { confirmPutaway, listNew } from '@/api/wms/stockAsn'
 import { getLocationByName } from '@/api/wms/goodsLocation'
+import { updateLocation } from '@/api/wms/stockAsn'
 import i18n from '@/languages/i18n'
+
+// Props
+const props = withDefaults(defineProps<{
+  mode?: 'putaway' | 'sorting'
+}>(), {
+  mode: 'putaway'
+})
 
 const xTable = ref()
 const emit = defineEmits(['success'])
@@ -521,65 +529,92 @@ const method = reactive({
     data.processing = true
     
     try {
-      // Preparar payload para API
-      const putawayList: any[] = []
-      
-      for (const row of previewData.value) {
-        if (row.status === 'OK') {
-          const asnItem = data.asnItemsMap.get(row.sku_code)
+      if (props.mode === 'sorting') {
+        // MODO SORTING: Apenas salvar endereços
+        const locationList: any[] = []
+        
+        for (const row of previewData.value) {
+          if (row.status === 'OK') {
+            locationList.push({
+              asn_id: row.asn_id,
+              goods_location_name: row.location_name
+            })
+          }
+        }
+        
+        console.log('🚀 PAYLOAD UPDATE LOCATION:', JSON.stringify(locationList, null, 2))
+        
+        const { data: res } = await updateLocation(locationList)
+        
+        if (res.isSuccess) {
+          hookComponent.$message({
+            type: 'success',
+            content: `${locationList.length} endereços salvos com sucesso!`
+          })
           
-          putawayList.push({
-            asn_id: row.asn_id, // ID do item do detailList (já validado)
-            goods_owner_id: asnItem.goods_owner_id || 0,
-            series_number: row.series_number || '',
-            goods_location_id: row.location_id,
-            putaway_qty: row.putaway_qty
+          emit('success')
+          method.closeDialog()
+        } else {
+          hookComponent.$message({
+            type: 'error',
+            content: res.errorMessage || 'Erro ao salvar endereços'
           })
         }
-      }
-      
-      console.log('🚀 PAYLOAD COMPLETO:', JSON.stringify(putawayList, null, 2))
-      console.log('📊 Total de itens no payload:', putawayList.length)
-      
-      // Processar um item por vez
-      let successCount = 0
-      let errorCount = 0
-      const logTemp = {}
-      
-      for (let i = 0; i < putawayList.length; i++) {
-        const item = putawayList[i]
-        console.log(`📦 Processando item ${i + 1}/${putawayList.length}:`, item)
-        
-        try {
-          // Enviar array com apenas 1 item
-          const { data: res } = await confirmPutaway([item], logTemp)
-          
-          if (res.isSuccess) {
-            successCount++
-            console.log(`✅ Item ${i + 1} processado com sucesso`)
-          } else {
-            errorCount++
-            console.error(`❌ Erro no item ${i + 1}:`, res.errorMessage)
-          }
-        } catch (error) {
-          errorCount++
-          console.error(`❌ Erro ao processar item ${i + 1}:`, error)
-        }
-      }
-      
-      if (successCount > 0) {
-        hookComponent.$message({
-          type: errorCount > 0 ? 'warning' : 'success',
-          content: `${successCount} itens armazenados com sucesso!${errorCount > 0 ? ` (${errorCount} com erro)` : ''}`
-        })
-        
-        emit('success')
-        method.closeDialog()
       } else {
-        hookComponent.$message({
-          type: 'error',
-          content: 'Todos os itens falharam ao processar'
-        })
+        // MODO PUTAWAY: Armazenar mercadorias
+        const putawayList: any[] = []
+        
+        for (const row of previewData.value) {
+          if (row.status === 'OK') {
+            const asnItem = data.asnItemsMap.get(row.sku_code)
+            
+            putawayList.push({
+              asn_id: row.asn_id,
+              goods_owner_id: asnItem.goods_owner_id || 0,
+              series_number: row.series_number || '',
+              goods_location_id: row.location_id,
+              putaway_qty: row.putaway_qty
+            })
+          }
+        }
+        
+        console.log('🚀 PAYLOAD PUTAWAY:', JSON.stringify(putawayList, null, 2))
+        
+        // Processar um item por vez
+        let successCount = 0
+        let errorCount = 0
+        const logTemp = {}
+        
+        for (let i = 0; i < putawayList.length; i++) {
+          const item = putawayList[i]
+          
+          try {
+            const { data: res } = await confirmPutaway([item], logTemp)
+            
+            if (res.isSuccess) {
+              successCount++
+            } else {
+              errorCount++
+            }
+          } catch (error) {
+            errorCount++
+          }
+        }
+        
+        if (successCount > 0) {
+          hookComponent.$message({
+            type: errorCount > 0 ? 'warning' : 'success',
+            content: `${successCount} itens armazenados com sucesso!${errorCount > 0 ? ` (${errorCount} com erro)` : ''}`
+          })
+          
+          emit('success')
+          method.closeDialog()
+        } else {
+          hookComponent.$message({
+            type: 'error',
+            content: 'Todos os itens falharam ao processar'
+          })
+        }
       }
     } catch (error: any) {
       console.error('Erro ao processar importação:', error)

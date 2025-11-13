@@ -191,3 +191,9 @@ export const getSkuInfo = (id: number) => http({
     method: 'post',
     data
   })
+
+  export const updateLocation = (data: Array<{ asn_id: number; goods_location_name: string }>) => http({
+    url: '/asn/update-location',
+    method: 'patch',
+    data
+  })
