@@ -428,12 +428,6 @@ onMounted(() => {
       click: method.refresh
     },
     {
-      name: 'Importar Excel',
-      icon: 'mdi-file-excel',
-      code: 'sorted-import',
-      click: () => importDialogRef.value.openDialog()
-    },
-    {
       name: i18n.global.t('system.page.export'),
       icon: 'mdi-export-variant',
       code: 'sorted-export',
@@ -450,6 +444,12 @@ onMounted(() => {
       icon: 'mdi-arrow-left-top',
       code: 'sorted-delete',
       click: method.handleRevoke
+    },
+    {
+      name: 'Importar Excel',
+      icon: 'mdi-file-excel',
+      code: '',
+      click: () => importDialogRef.value.openDialog()
     }
   ]
 })
