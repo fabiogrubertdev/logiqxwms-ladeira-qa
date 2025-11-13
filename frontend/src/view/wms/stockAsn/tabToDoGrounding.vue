@@ -6,15 +6,7 @@
         <!-- <tooltip-btn icon="mdi-refresh" :tooltip-text="$t('system.page.refresh')" @click="method.refresh"></tooltip-btn>
         <tooltip-btn icon="mdi-export-variant" :tooltip-text="$t('system.page.export')" @click="method.exportTable"> </tooltip-btn> -->
 
-        <!-- new version -->
         <BtnGroup :authority-list="data.authorityList" :btn-list="data.btnList" />
-        
-        <!-- ⭐ NOVO BOTÃO - Importar Excel -->
-        <tooltip-btn 
-          icon="mdi-file-excel" 
-          :tooltip-text="'Importar Excel'"
-          @click="method.openImportDialog">
-        </tooltip-btn>
       </v-col>
 
       <!-- Search Input -->
@@ -84,14 +76,27 @@
       <vxe-column field="weight" :title="$t('wms.stockAsnInfo.weight')"></vxe-column>
       <vxe-column field="volume" :title="$t('wms.stockAsnInfo.volume')"></vxe-column>
       <vxe-column field="sorted_qty" :title="$t('wms.stockAsnInfo.sorted_qty')"></vxe-column>
-      <vxe-column field="actual_qty" :title="$t('wms.stockAsnInfo.actual_qty')"></vxe-column>
-      <vxe-column field="operate" :title="$t('system.page.operate')" width="160" :resizable="false" show-overflow>
+      <vxe-column field="operate" :title="$t('system.page.operate')" width="180" :resizable="false" show-overflow>
         <template #default="{ row }">
           <tooltip-btn
             :flat="true"
-            icon="mdi-package-up"
-            :tooltip-text="$t('wms.stockAsnInfo.grounding')"
-            :disabled="!data.authorityList.includes('putOnTheShelf-editArrival')"
+            icon="mdi-plus"
+            :tooltip-text="$t('wms.stockAsnInfo.addSorting')"
+            :disabled="!data.authorityList.includes('sorted-editCount')"
+            @click="method.addSorting(row)"
+          ></tooltip-btn>
+          <tooltip-btn
+            :flat="true"
+            icon="mdi-pencil-outline"
+            :tooltip-text="$t('wms.stockAsnInfo.editSorting')"
+            :disabled="!data.authorityList.includes('sorted-editCount')"
+            @click="method.editRowEdit(row)"
+          ></tooltip-btn>
+          <tooltip-btn
+            :flat="true"
+            icon="mdi-check"
+            :tooltip-text="$t('system.page.confirm')"
+            :disabled="!data.authorityList.includes('sorted-confirm')"
             @click="method.editRow(row)"
           ></tooltip-btn>
           <!-- <tooltip-btn
@@ -99,7 +104,7 @@
             icon="mdi-delete-outline"
             :tooltip-text="$t('system.page.delete')"
             :icon-color="errorColor"
-            :disabled="!data.authorityList.includes('putOnTheShelf-delete')"
+            :disabled="!data.authorityList.includes('sorted-delete')"
             @click="method.deleteRow(row)"
           ></tooltip-btn> -->
         </template>
@@ -116,58 +121,40 @@
     >
     </custom-pager>
   </div>
-  <updateGrounding :show-dialog="data.showDialog" :form="data.dialogForm" @close="method.closeDialog" @saveSuccess="method.saveSuccess" />
-
-  <!-- Listing operation box -->
-  <confirmGroudingDialog ref="confirmGroudingDialogRef" @sure="method.confirmGroudingSure" />
+  <addSorting ref="addSortingRef" @sure="method.addSortingSure" />
+  <updateSortingDialog ref="updateSortingDialogRef" @sure="method.updateSortingSure" />
+  <importPutawayDialog ref="importDialogRef" mode="sorting" @success="method.refresh" />
   <skuInfo :show-dialog="data.showDialogShowInfo" :form="data.dialogForm" @close="method.closeDialogShowInfo" />
-  <!-- Print QR code -->
-  <qr-code-dialog ref="qrCodeDialogRef" :menu="'stockAsnInfo-notice'">
-    <template #left="{ slotData }">
-      <p>{{ $t('wms.stockAsnInfo.num') }}:{{ slotData.asn_no }}</p>
-      <p>{{ $t('wms.stockAsnInfo.spu_name') }}:{{ slotData.spu_name }}</p>
-      <p>{{ $t('wms.stockAsnInfo.sku_code') }}:{{ slotData.sku_code }}</p>
-      <p>SN:{{ slotData.series_number }}</p>
-    </template>
-  </qr-code-dialog>
-  <!-- ⭐ NOVO COMPONENTE - Importação de Excel -->
-  <ImportPutawayDialog 
-    ref="importPutawayDialogRef" 
-    @success="method.importSuccess" 
-  />
 </template>
 
 <script lang="ts" setup>
 import { computed, ref, reactive, watch, onMounted, nextTick } from 'vue'
 import { VxePagerEvents } from 'vxe-table'
 import { computedCardHeight, computedTableHeight } from '@/constant/style'
-import { StockAsnVO } from '@/types/WMS/StockAsn'
+import { StockAsnVO, UpdateSortingVo } from '@/types/WMS/StockAsn'
 import { PAGE_SIZE, PAGE_LAYOUT, DEFAULT_PAGE_SIZE } from '@/constant/vxeTable'
 import { hookComponent } from '@/components/system'
 import { DEBOUNCE_TIME } from '@/constant/system'
 import { setSearchObject, getMenuAuthorityList } from '@/utils/common'
 import { SearchObject, btnGroupItem } from '@/types/System/Form'
-import { getStockAsnList, sortedAsnCancel, revokeSorting, confirmPutaway, getPrintAsnList } from '@/api/wms/stockAsn'
+import { editSorting, getStockAsnList, revokeUnload, confirmSorted, unloadAsnCancel, modifySorting } from '@/api/wms/stockAsn'
 import tooltipBtn from '@/components/tooltip-btn.vue'
 import i18n from '@/languages/i18n'
-import updateGrounding from './update-grounding.vue'
+import addSorting from './add-sorting.vue'
 import customPager from '@/components/custom-pager.vue'
 import skuInfo from './sku-info.vue'
 import { exportData } from '@/utils/exportTable'
 import BtnGroup from '@/components/system/btnGroup.vue'
-import confirmGroudingDialog from './confirm-grouding.vue'
+import updateSortingDialog from './update-sorting.vue'
+import importPutawayDialog from './import-putaway-dialog.vue'
 import { httpCodeJudge } from '@/utils/http/httpCodeJudge'
-import QrCodeDialog from '@/components/codeDialog/qrCodeDialog.vue'
-import ImportPutawayDialog from './import-putaway-dialog.vue'
 
 const xTableStockLocation = ref()
-const confirmGroudingDialogRef = ref()
-const qrCodeDialogRef = ref()
-const importPutawayDialogRef = ref()
-const currentRow = ref<StockAsnVO | null>(null)
+const addSortingRef = ref()
+const updateSortingDialogRef = ref()
+const importDialogRef = ref()
 
 const data = reactive({
-  showDialog: false,
   showDialogShowInfo: false,
   searchForm: {
     supplier_name: '',
@@ -192,7 +179,7 @@ const data = reactive({
   tableData: ref<StockAsnVO[]>([]),
   tablePage: reactive({
     total: 0,
-    sqlTitle: 'asn_status:3',
+    sqlTitle: 'asn_status:2',
     pageIndex: 1,
     pageSize: DEFAULT_PAGE_SIZE,
     searchObjects: ref<Array<SearchObject>>([])
@@ -204,40 +191,14 @@ const data = reactive({
 })
 
 const method = reactive({
-  printQrCode: async () => {
-    const records = xTableStockLocation.value.getCheckboxRecords()
-
-    // data.selectRowData.length === 0 ? data.selectRowData = [row] : ''
-    // const records:any[] = data.selectRowData
-    if (records.length > 0) {
-      const list = records.map((item) => item.id)
-      const { data: res } = await getPrintAsnList(list)
-      if (!res.isSuccess) {
-        hookComponent.$message({
-          type: 'error',
-          content: res.errorMessage
-        })
-        return
-      }
-      const printList = res.data.map((item) => ({ id: item.asn_id, type: 'ground', ...item }))
-
-      qrCodeDialogRef.value.openDialog(printList)
-    } else {
-      hookComponent.$message({
-        type: 'error',
-        content: i18n.global.t('base.userManagement.checkboxIsNull')
-      })
-    }
-  },
-  // Confirm listing data
-  confirmGroudingSure: async (tableData: any) => {
-    const logTemp = currentRow.value
-    const { data: res } = await confirmPutaway(tableData, logTemp)
+  // Modify sorting information callback
+  updateSortingSure: async (tableData: UpdateSortingVo[]) => {
+    const { data: res } = await modifySorting(tableData)
     if (!res.isSuccess) {
       // 2023-12-06 Add automatic refresh of expired data
       if (httpCodeJudge(res.errorMessage)) {
         method.refresh()
-        confirmGroudingDialogRef.value.closeDialog()
+        updateSortingDialogRef.value.closeDialog()
 
         return
       }
@@ -253,7 +214,7 @@ const method = reactive({
       content: `${ i18n.global.t('system.page.submit') }${ i18n.global.t('system.tips.success') }`
     })
 
-    confirmGroudingDialogRef.value.closeDialog()
+    updateSortingDialogRef.value.closeDialog()
     method.refresh()
   },
   // Withdrawal process
@@ -265,7 +226,7 @@ const method = reactive({
       hookComponent.$dialog({
         content: i18n.global.t('system.tips.beforeOperation'),
         handleConfirm: async () => {
-          const { data: res } = await revokeSorting(idList, logTemp)
+          const { data: res } = await revokeUnload(idList, logTemp)
           if (!res.isSuccess) {
             // 2023-12-06 Add automatic refresh of expired data
             if (httpCodeJudge(res.errorMessage)) {
@@ -282,7 +243,7 @@ const method = reactive({
           }
           hookComponent.$message({
             type: 'success',
-            content: `${ i18n.global.t('system.page.delete') }${ i18n.global.t('system.tips.success') }`
+            content: `${ i18n.global.t('system.page.revoke') }${ i18n.global.t('system.tips.success') }`
           })
           method.refresh()
         }
@@ -294,6 +255,32 @@ const method = reactive({
       })
     }
   },
+  // Callback after modifying sorting information
+  addSortingSure: async (reqData: { asn_id: number; series_number: string; sorted_qty: number }[]) => {
+    const { data: res } = await editSorting(reqData)
+    if (!res.isSuccess) {
+      // 2023-12-06 Add automatic refresh of expired data
+      if (httpCodeJudge(res.errorMessage)) {
+        method.refresh()
+        addSortingRef.value.closeDialog()
+
+        return
+      }
+
+      hookComponent.$message({
+        type: 'error',
+        content: res.errorMessage
+      })
+      return
+    }
+    hookComponent.$message({
+      type: 'success',
+      content: `${ i18n.global.t('system.page.submit') }${ i18n.global.t('system.tips.success') }`
+    })
+
+    addSortingRef.value.closeDialog()
+    method.refresh()
+  },
   closeDialogShowInfo: () => {
     data.showDialogShowInfo = false
   },
@@ -301,27 +288,49 @@ const method = reactive({
     data.dialogForm = JSON.parse(JSON.stringify(row))
     data.showDialogShowInfo = true
   },
-  // Shut add or update dialog
-  closeDialog: () => {
-    data.showDialog = false
+  // Add sorting record
+  addSorting: (row: StockAsnVO) => {
+    addSortingRef.value.openDialog(row.id)
   },
-  // After add or update success.
-  saveSuccess: () => {
-    method.refresh()
-    method.closeDialog()
+  editRowEdit(row: StockAsnVO) {
+    updateSortingDialogRef.value.openDialog(row.id)
   },
   editRow(row: StockAsnVO) {
-    // data.dialogForm = JSON.parse(JSON.stringify(row))
-    // data.showDialog = true
-    currentRow.value = row
-    confirmGroudingDialogRef.value.openDialog(row.id)
+    hookComponent.$dialog({
+      content: i18n.global.t('system.tips.beforeAsnSorted'),
+      handleConfirm: async () => {
+        if (row.id) {
+          const logTemp = { asn_no: row.asn_no, sku_code: row.sku_code, spu_code: row.spu_code }
+          const { data: res } = await confirmSorted(row.id, logTemp)
+          if (!res.isSuccess) {
+            // 2023-12-06 Add automatic refresh of expired data
+            if (httpCodeJudge(res.errorMessage)) {
+              method.refresh()
+
+              return
+            }
+
+            hookComponent.$message({
+              type: 'error',
+              content: res.errorMessage
+            })
+            return
+          }
+          hookComponent.$message({
+            type: 'success',
+            content: `${ i18n.global.t('system.page.confirm') }${ i18n.global.t('system.tips.success') }`
+          })
+          method.refresh()
+        }
+      }
+    })
   },
   deleteRow(row: StockAsnVO) {
     hookComponent.$dialog({
       content: i18n.global.t('system.tips.beforeDeleteMessage'),
       handleConfirm: async () => {
         if (row.id) {
-          const { data: res } = await sortedAsnCancel(row.id)
+          const { data: res } = await unloadAsnCancel(row.id)
           if (!res.isSuccess) {
             hookComponent.$message({
               type: 'error',
@@ -331,7 +340,7 @@ const method = reactive({
           }
           hookComponent.$message({
             type: 'success',
-            content: `${ i18n.global.t('system.page.revoke') }${ i18n.global.t('system.tips.success') }`
+            content: `${ i18n.global.t('system.page.delete') }${ i18n.global.t('system.tips.success') }`
           })
           method.refresh()
         }
@@ -364,7 +373,7 @@ const method = reactive({
     const $table = xTableStockLocation.value
     exportData({
       table: $table,
-      filename: i18n.global.t('wms.stockAsn.tabToDoGrounding'),
+      filename: i18n.global.t('wms.stockAsn.tabToDoSorting'),
       columnFilterMethod({ column }: any) {
         return !['checkbox'].includes(column?.type) && !['operate'].includes(column?.field)
       }
@@ -409,25 +418,21 @@ const method = reactive({
     method.getStockAsnList()
   },
 
-  // ⭐ NOVO MÉTODO - Abrir diálogo de importação
   openImportDialog: () => {
-    const checkRecords = xTableStockLocation.value.getCheckboxRecords()
-    
-    if (checkRecords.length !== 1) {
+    const selectRecords = xTableStockLocation.value.getCheckboxRecords()
+    if (selectRecords.length === 0) {
       hookComponent.$message({
         type: 'warning',
-        content: 'Selecione apenas 1 ASN para importar'
+        content: 'Selecione pelo menos um ASN'
       })
       return
     }
     
-    const selectedAsn = checkRecords[0]
-    importPutawayDialogRef.value.openDialog(selectedAsn.asn_no)
-  },
-
-  // ⭐ NOVO MÉTODO - Callback de sucesso da importação
-  importSuccess: () => {
-    method.refresh()
+    // Pegar o primeiro ASN selecionado
+    const firstAsn = selectRecords[0]
+    console.log('🔍 ASN selecionado:', firstAsn)
+    console.log('🔍 ASN_NO:', firstAsn.asn_no)
+    importDialogRef.value.openDialog(firstAsn.asn_no)
   }
 })
 
@@ -442,26 +447,26 @@ onMounted(() => {
     {
       name: i18n.global.t('system.page.export'),
       icon: 'mdi-export-variant',
-      code: 'putOnTheShelf-export',
+      code: 'sorted-export',
       click: method.exportTable
     },
     {
       name: i18n.global.t('system.page.exportAll'),
       icon: 'mdi-apple-keyboard-shift',
-      code: 'putOnTheShelf-exportAll',
+      code: 'sorted-exportAll',
       click: method.exportAll
     },
     {
       name: i18n.global.t('wms.stockAsnInfo.revoke'),
       icon: 'mdi-arrow-left-top',
-      code: 'putOnTheShelf-delete',
+      code: 'sorted-delete',
       click: method.handleRevoke
     },
     {
-      name: i18n.global.t('base.commodityManagement.printQrCode'),
-      icon: 'mdi-qrcode',
-      code: 'putOnTheShelf-printQrCode',
-      click: method.printQrCode
+      name: 'Importar Excel',
+      icon: 'mdi-file-excel',
+      code: '',
+      click: method.openImportDialog
     }
   ]
 })
