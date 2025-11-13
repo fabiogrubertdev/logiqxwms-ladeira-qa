@@ -538,7 +538,11 @@ const method = reactive({
         }
       }
       
-      console.log('Enviando para API:', putawayList)
+      console.log('🚀 PAYLOAD COMPLETO:', JSON.stringify(putawayList, null, 2))
+      console.log('📊 Total de itens no payload:', putawayList.length)
+      putawayList.forEach((item, index) => {
+        console.log(`📦 Item ${index}:`, item)
+      })
       
       // Chamar API de armazenamento
       const logTemp = {} // Pode adicionar informações de log se necessário
