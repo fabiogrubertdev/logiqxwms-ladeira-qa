@@ -123,6 +123,7 @@
   </div>
   <addSorting ref="addSortingRef" @sure="method.addSortingSure" />
   <updateSortingDialog ref="updateSortingDialogRef" @sure="method.updateSortingSure" />
+  <importPutawayDialog ref="importDialogRef" mode="sorting" @success="method.refresh" />
   <skuInfo :show-dialog="data.showDialogShowInfo" :form="data.dialogForm" @close="method.closeDialogShowInfo" />
 </template>
 
@@ -145,11 +146,13 @@ import skuInfo from './sku-info.vue'
 import { exportData } from '@/utils/exportTable'
 import BtnGroup from '@/components/system/btnGroup.vue'
 import updateSortingDialog from './update-sorting.vue'
+import importPutawayDialog from './import-putaway-dialog.vue'
 import { httpCodeJudge } from '@/utils/http/httpCodeJudge'
 
 const xTableStockLocation = ref()
 const addSortingRef = ref()
 const updateSortingDialogRef = ref()
+const importDialogRef = ref()
 
 const data = reactive({
   showDialogShowInfo: false,
@@ -423,6 +426,12 @@ onMounted(() => {
       icon: 'mdi-refresh',
       code: '',
       click: method.refresh
+    },
+    {
+      name: 'Importar Excel',
+      icon: 'mdi-file-excel',
+      code: 'sorted-import',
+      click: () => importDialogRef.value.openDialog()
     },
     {
       name: i18n.global.t('system.page.export'),
