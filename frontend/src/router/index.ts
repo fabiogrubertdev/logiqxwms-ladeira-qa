@@ -57,7 +57,7 @@ const router = createRouter({
   // }
 })
 
-// vite2 dynamic import
+
 const modules = import.meta.glob('../view/*/*/*.vue')
 
 // load router function
@@ -125,6 +125,27 @@ router.beforeEach((to, from, next) => {
 router.afterEach(() => {
   // disable back or forward
   window.history.pushState(null, '', window.location.href)
+})
+
+
+
+// Rotas estáticas para a funcionalidade mobile-first
+router.addRoute('home', {
+  name: 'confirmUnloadMobile',
+  path: '/confirmUnloadMobile',
+  component: () => import('@/view/wms/confirmUnloadMobile/ConfirmacaoDescargaLista.vue'),
+  meta: {
+    menuPath: 'confirmUnloadMobile'
+  }
+})
+
+router.addRoute('home', {
+  name: 'confirmUnloadMobileDetail',
+  path: '/confirmUnloadMobileDetail',
+  component: () => import('@/view/wms/confirmUnloadMobile/ConfirmacaoDescargaDetalhe.vue'),
+  meta: {
+    menuPath: 'confirmUnloadMobile'
+  }
 })
 
 export { router }

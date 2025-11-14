@@ -116,6 +116,9 @@ function GetMenuNameAndModule(path: string): string {
       return i18n.global.t('router.sideBar.deliveryManagement')
     case 'stockAsn':
       return i18n.global.t('router.sideBar.stockAsn')
+    case 'confirmUnloadMobile':
+      return i18n.global.t('router.sideBar.confirmUnloadMobile')
+
     case 'saftyStock':
       return i18n.global.t('router.sideBar.saftyStock')
     case 'deliveryStatistic':
@@ -140,6 +143,7 @@ function GetModuleAndIcon(name: string) {
       return 'warehouse'
     case 'stockAsn':
     case 'asnStatistic':
+    case 'confirmUnloadMobile':
       return 'home-silo'
     case 'warehouseWorkingModule':
       return 'account-hard-hat-outline '
