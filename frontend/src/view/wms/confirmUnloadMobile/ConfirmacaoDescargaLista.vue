@@ -81,6 +81,7 @@ const method = reactive({
 
     if (data.searchForm.asn_no) {
       // Se houver busca, usa setSearchObject para construir o filtro
+      // O setSearchObject deve ser capaz de converter { asn_no: 'valor' } para o formato esperado pelo backend
       searchObjects = setSearchObject(data.searchForm)
       sqlTitle = '' // Limpa o sqlTitle se houver searchObjects
     }
