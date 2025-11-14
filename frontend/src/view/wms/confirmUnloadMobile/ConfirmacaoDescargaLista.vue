@@ -71,7 +71,7 @@ const method = reactive({
   async getList() {
     data.loading = true
     let sqlTitle = 'asn_status:2' // Status 'A Separar'
-    let searchObjects = []
+    let searchObjects: any[] = []
 
     if (data.search) {
       // Se houver busca, filtra por asn_no
