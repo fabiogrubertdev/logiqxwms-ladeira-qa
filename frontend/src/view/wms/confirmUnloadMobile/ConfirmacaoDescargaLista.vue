@@ -72,9 +72,9 @@ const method = reactive({
     data.loading = true
     try {
       const { data: res } = await getStockAsnList({
-        asn_status: 2, // Status 'A Separar'
         pageIndex: 1,
-        pageSize: 100 // Load a reasonable amount for mobile operation
+        pageSize: 100, // Load a reasonable amount for mobile operation
+        searchObjects: [{ searchProperty: 'asn_status', searchValue: 2, searchOperation: 0 }] // Status 'A Separar'
       })
       if (res.isSuccess) {
         data.asnList = res.data.tableData
