@@ -269,6 +269,13 @@ const method = reactive({
    * Abrir diálogo
    */
   openDialog: async (asnNo: string) => {
+    // Evitar chamadas duplas
+    if (data.processing) {
+      console.log('⚠️ Já está carregando, ignorando...')
+      return
+    }
+    
+    data.processing = true
     data.currentAsnNo = asnNo
     previewData.value = []
     data.excelFile = null
@@ -279,6 +286,7 @@ const method = reactive({
     await method.loadAsnItems(asnNo)
     
     data.showDialog = true
+    data.processing = false
   },
   
   /**
@@ -436,44 +444,56 @@ const method = reactive({
         validatedRow.message = 'Quantidade inválida'
         data.errorCount++
       }
-      // Validação 2: SKU existe em "A Armazenar"?
+      // Validação 2: SKU existe no ASN?
       else if (!data.asnItemsMap.has(validatedRow.sku_code)) {
+        const statusName = props.mode === 'sorting' ? 'A Separar' : 'A Armazenar'
         validatedRow.status = 'ERRO'
-        validatedRow.message = 'SKU não encontrado em "A Armazenar"'
+        validatedRow.message = `SKU não encontrado em "${statusName}"`
         data.errorCount++
       }
-      // Validação 3: Quantidade não excede disponível
+      // Validação 3: Quantidade e endereço
       else {
         const asnItem = data.asnItemsMap.get(validatedRow.sku_code)
         validatedRow.asn_id = asnItem.id // ID do item do detailList
-        validatedRow.sorted_qty_available = asnItem.sorted_qty
         
-        if (validatedRow.putaway_qty > asnItem.sorted_qty) {
+        // No modo sorting, validar contra asn_qty
+        // No modo putaway, validar contra sorted_qty
+        const availableQty = props.mode === 'sorting' ? asnItem.asn_qty : asnItem.sorted_qty
+        validatedRow.sorted_qty_available = availableQty
+        
+        if (validatedRow.putaway_qty > availableQty) {
           validatedRow.status = 'ERRO'
-          validatedRow.message = `Quantidade excede disponível (${asnItem.sorted_qty})`
+          validatedRow.message = `Quantidade excede disponível (${availableQty})`
           validatedRow.qty_valid = false
           data.errorCount++
         } else {
           validatedRow.qty_valid = true
           
-          // Validação 4: Endereço existe?
-          try {
-            const location = await method.findLocation(validatedRow.location_name)
-            if (!location) {
+          // Validação 4: Endereço
+          if (props.mode === 'sorting') {
+            // Modo sorting: apenas aceitar qualquer endereço (não precisa validar se existe)
+            validatedRow.location_found = true
+            data.validCount++
+          } else {
+            // Modo putaway: validar se endereço existe no sistema
+            try {
+              const location = await method.findLocation(validatedRow.location_name)
+              if (!location) {
+                validatedRow.status = 'ERRO'
+                validatedRow.message = 'Endereço não encontrado no sistema'
+                validatedRow.location_found = false
+                data.errorCount++
+              } else {
+                validatedRow.location_found = true
+                validatedRow.location_id = location.id
+                data.validCount++
+              }
+            } catch (error) {
               validatedRow.status = 'ERRO'
-              validatedRow.message = 'Endereço não encontrado no sistema'
+              validatedRow.message = 'Erro ao buscar endereço'
               validatedRow.location_found = false
               data.errorCount++
-            } else {
-              validatedRow.location_found = true
-              validatedRow.location_id = location.id
-              data.validCount++
             }
-          } catch (error) {
-            validatedRow.status = 'ERRO'
-            validatedRow.message = 'Erro ao buscar endereço'
-            validatedRow.location_found = false
-            data.errorCount++
           }
         }
       }
