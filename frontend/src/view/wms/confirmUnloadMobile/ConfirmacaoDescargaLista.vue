@@ -45,6 +45,8 @@
 import { reactive, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { getStockAsnList } from '@/api/wms/stockAsn'
+import { setSearchObject } from '@/utils/common'
+import { SearchObject } from '@/types/System/Form'
 import { hookComponent } from '@/components/system'
 import i18n from '@/languages/i18n'
 
@@ -53,7 +55,10 @@ const router = useRouter()
 const data = reactive({
   search: '',
   asnList: [] as any[],
-  loading: false
+  loading: false,
+  searchForm: {
+    asn_no: ''
+  }
 })
 
 const filteredList = computed(() => {
@@ -64,6 +69,7 @@ const filteredList = computed(() => {
 const method = reactive({
   // Search function
   sureSearch() {
+    data.searchForm.asn_no = data.search
     method.getList()
   },
 
@@ -71,11 +77,11 @@ const method = reactive({
   async getList() {
     data.loading = true
     let sqlTitle = 'asn_status:2' // Status 'A Separar'
-    let searchObjects: any[] = []
+    let searchObjects: SearchObject[] = []
 
-    if (data.search) {
-      // Se houver busca, filtra por asn_no
-      searchObjects.push({ searchProperty: 'asn_no', searchValue: data.search, searchOperation: 0 })
+    if (data.searchForm.asn_no) {
+      // Se houver busca, usa setSearchObject para construir o filtro
+      searchObjects = setSearchObject(data.searchForm)
       sqlTitle = '' // Limpa o sqlTitle se houver searchObjects
     }
 
