@@ -416,6 +416,23 @@ const method = reactive({
   sureSearch: () => {
     data.tablePage.searchObjects = setSearchObject(data.searchForm)
     method.getStockAsnList()
+  },
+
+  openImportDialog: () => {
+    const selectRecords = xTableStockLocation.value.getCheckboxRecords()
+    if (selectRecords.length === 0) {
+      hookComponent.$message({
+        type: 'warning',
+        content: 'Selecione pelo menos um ASN'
+      })
+      return
+    }
+    
+    // Pegar o primeiro ASN selecionado
+    const firstAsn = selectRecords[0]
+    console.log('🔍 ASN selecionado:', firstAsn)
+    console.log('🔍 ASN_NO:', firstAsn.asn_no)
+    importDialogRef.value.openDialog(firstAsn.asn_no)
   }
 })
 
@@ -449,7 +466,7 @@ onMounted(() => {
       name: 'Importar Excel',
       icon: 'mdi-file-excel',
       code: '',
-      click: () => importDialogRef.value.openDialog()
+      click: method.openImportDialog
     }
   ]
 })
