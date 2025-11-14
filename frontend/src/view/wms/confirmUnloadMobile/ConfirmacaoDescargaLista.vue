@@ -14,6 +14,7 @@
           hide-details
           clearable
           class="mb-4"
+          @keyup.enter="method.sureSearch"
         ></v-text-field>
 
         <v-list lines="two" class="asn-list">
@@ -56,25 +57,34 @@ const data = reactive({
 })
 
 const filteredList = computed(() => {
-  if (!data.search) {
-    return data.asnList
-  }
-  const searchLower = data.search.toLowerCase()
-  return data.asnList.filter(item =>
-    item.asn_no.toLowerCase().includes(searchLower) ||
-    item.owner_name.toLowerCase().includes(searchLower)
-  )
+  // A filtragem local não é mais necessária, pois a busca será feita na API
+  return data.asnList
 })
 
 const method = reactive({
+  // Search function
+  sureSearch() {
+    method.getList()
+  },
+
   // Get ASN list with status 'A Separar' (2)
   async getList() {
     data.loading = true
+    let sqlTitle = 'asn_status:2' // Status 'A Separar'
+    let searchObjects = []
+
+    if (data.search) {
+      // Se houver busca, filtra por asn_no
+      searchObjects.push({ searchProperty: 'asn_no', searchValue: data.search, searchOperation: 0 })
+      sqlTitle = '' // Limpa o sqlTitle se houver searchObjects
+    }
+
     try {
       const { data: res } = await getStockAsnList({
         pageIndex: 1,
         pageSize: 100, // Load a reasonable amount for mobile operation
-        sqlTitle: 'asn_status:2' // Status 'A Separar' usando o padrão do projeto
+        sqlTitle: sqlTitle,
+        searchObjects: searchObjects
       })
       if (res.isSuccess) {
         data.asnList = res.data.tableData
