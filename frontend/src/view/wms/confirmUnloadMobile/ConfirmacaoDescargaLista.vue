@@ -44,9 +44,7 @@
 <script lang="ts" setup>
 import { reactive, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { getStockAsnList } from '@/api/wms/stockAsn'
-import { setSearchObject } from '@/utils/common'
-import { SearchObject } from '@/types/System/Form'
+import { listNew } from '@/api/wms/stockAsn'
 import { hookComponent } from '@/components/system'
 import i18n from '@/languages/i18n'
 
@@ -55,10 +53,7 @@ const router = useRouter()
 const data = reactive({
   search: '',
   asnList: [] as any[],
-  loading: false,
-  searchForm: {
-    asn_no: ''
-  }
+  loading: false
 })
 
 const filteredList = computed(() => {
@@ -69,30 +64,38 @@ const filteredList = computed(() => {
 const method = reactive({
   // Search function
   sureSearch() {
-    data.searchForm.asn_no = data.search
     method.getList()
   },
 
   // Get ASN list with status 'A Separar' (2)
   async getList() {
     data.loading = true
-    let sqlTitle = 'asn_status:2' // Status 'A Separar'
-    let searchObjects: SearchObject[] = []
+    
+    let requestBody: any = {
+      pageIndex: 1,
+      pageSize: 100, // Load a reasonable amount for mobile operation
+      searchObjects: []
+    }
 
-    if (data.searchForm.asn_no) {
-      // Se houver busca, usa setSearchObject para construir o filtro
-      // O setSearchObject deve ser capaz de converter { asn_no: 'valor' } para o formato esperado pelo backend
-      searchObjects = setSearchObject(data.searchForm)
-      sqlTitle = '' // Limpa o sqlTitle se houver searchObjects
+    // Filtro de status fixo (A Separar)
+    requestBody.searchObjects.push({
+      name: 'asn_status',
+      operator: 1, // Assumindo que 1 é o operador 'igual'
+      text: '2'
+    })
+
+    if (data.search) {
+      // Se houver busca, adiciona o filtro de asn_no
+      requestBody.searchObjects.push({
+        name: 'asn_no',
+        operator: 1, // Assumindo que 1 é o operador 'igual' ou 'contém'
+        text: data.search
+      })
     }
 
     try {
-      const { data: res } = await getStockAsnList({
-        pageIndex: 1,
-        pageSize: 100, // Load a reasonable amount for mobile operation
-        sqlTitle: sqlTitle,
-        searchObjects: searchObjects
-      })
+      // Trocando getStockAsnList por listNew (que usa /asn/asnmaster/list)
+      const { data: res } = await listNew(requestBody)
       if (res.isSuccess) {
         data.asnList = res.data.tableData
       } else {
