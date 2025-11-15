@@ -59,7 +59,7 @@ import { reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { listNew } from '@/api/wms/stockAsn'
 import { hookComponent } from '@/components/system'
-import { i18n } from '@/languages'
+import i18n from '@/languages/i18n'
 
 const router = useRouter()
 
